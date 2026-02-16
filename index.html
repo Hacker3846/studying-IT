@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEON SHOP — Витрина</title>
+    <link rel="stylesheet" href="style.css">
+    
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
+</head>
+<body>
+
+<div class="container">
+    <h2>🛍 NEON SHOP</h2>
+    <div id="catalog" class="products-grid"></div>
+</div>
+
+<div class="cart-bar" id="cart-bar" style="display: none;">
+    <div class="drag-line" id="cart-touch-zone"></div>
+    
+    <div class="cart-header" id="cart-header-zone">
+        <div class="cart-summary">
+            <b id="bar-total">0 ₽</b>
+            <span id="bar-count">0 товаров</span>
+        </div>
+        <button class="btn-open-cart" id="main-cart-btn">ОФОРМИТЬ</button>
+    </div>
+
+    <div class="cart-content">
+        <h3 class="cart-title">Ваш заказ:</h3>
+        <div id="cart-items"></div>
+        
+        <form class="form-block" id="orderForm" onsubmit="event.preventDefault(); sendOrder();">
+            <input type="text" id="userName" placeholder="👤 Ваше имя" required minlength="2">
+            
+            <div class="no-phone-toggle">
+                <label class="checkbox-container">
+                    <input type="checkbox" id="noPhoneCheck" onchange="togglePhoneField()">
+                    <span class="checkmark"></span>
+                    Заказать без номера
+                </label>
+            </div>
+
+            <input type="tel" id="userPhone" 
+                   placeholder="📞 +7 (999) 000-00-00" 
+                   required 
+                   pattern="^(\+7|8|7)[\s\-]?\(?[489][0-9]{2}\)?[\s\-]?[\0-9]{3}[\s\-]?[\0-9]{2}[\s\-]?[\0-9]{2}$">
+
+            <div id="phoneWarning" class="warning-text" style="display: none;">
+                ⚠️ Без номера будет трудно связаться с вами при пополненит товара или при её выдаче.
+            </div>
+            
+            <button type="submit" class="btn-final">ПОДТВЕРДИТЬ ЗАКАЗ</button>
+        </form>
+    </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
