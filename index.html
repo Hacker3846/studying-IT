@@ -231,6 +231,40 @@
     border-color: var(--accent);
   }
 
+  /* ===== ПОКАЗАТЬ/СКРЫТЬ ПАРОЛЬ ===== */
+  .password-field {
+    position: relative;
+  }
+
+  .password-field input[type="password"],
+  .password-field input[type="text"] {
+    padding-right: 42px;
+  }
+
+  .password-toggle {
+    position: absolute;
+    top: 50%;
+    right: 4px;
+    transform: translateY(-50%);
+    width: 34px;
+    height: 34px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    padding: 0;
+  }
+
+  .password-toggle:hover { color: var(--ink); }
+  .password-toggle svg { width: 19px; height: 19px; }
+  .password-toggle .eye-off { display: none; }
+  .password-toggle.showing .eye { display: none; }
+  .password-toggle.showing .eye-off { display: block; }
+
   .btn-primary {
     width: 100%;
     padding: 13px 0;
@@ -449,7 +483,13 @@
       </div>
       <div class="field">
         <label for="loginPassword">Пароль</label>
-        <input type="password" id="loginPassword" placeholder="••••••••" required autocomplete="current-password">
+        <div class="password-field">
+          <input type="password" id="loginPassword" placeholder="••••••••" required autocomplete="current-password">
+          <button type="button" class="password-toggle" onclick="togglePasswordVisibility('loginPassword', this)" title="Показать пароль" aria-label="Показать пароль">
+            <svg class="eye" viewBox="0 0 24 24" fill="none"><path d="M1 12C1 12 5 4 12 4C19 4 23 12 23 12C23 12 19 20 12 20C5 20 1 12 1 12Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg>
+            <svg class="eye-off" viewBox="0 0 24 24" fill="none"><path d="M17.94 17.94C16.23 19.24 14.24 20 12 20C5 20 1 12 1 12C2.24 9.68 3.9 7.75 5.86 6.35M9.9 4.24C10.58 4.09 11.28 4 12 4C19 4 23 12 23 12C22.39 13.16 21.6 14.27 20.68 15.27M14.12 14.12C13.62 14.63 12.85 15 12 15C10.34 15 9 13.66 9 12C9 11.15 9.37 10.38 9.88 9.88" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M1 1L23 23" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+        </div>
       </div>
       <button type="submit" class="btn-primary" id="loginBtn">Войти</button>
     </form>
@@ -466,7 +506,13 @@
       </div>
       <div class="field">
         <label for="signupPassword">Пароль</label>
-        <input type="password" id="signupPassword" placeholder="Минимум 6 символов" required autocomplete="new-password" minlength="6">
+        <div class="password-field">
+          <input type="password" id="signupPassword" placeholder="Минимум 6 символов" required autocomplete="new-password" minlength="6">
+          <button type="button" class="password-toggle" onclick="togglePasswordVisibility('signupPassword', this)" title="Показать пароль" aria-label="Показать пароль">
+            <svg class="eye" viewBox="0 0 24 24" fill="none"><path d="M1 12C1 12 5 4 12 4C19 4 23 12 23 12C23 12 19 20 12 20C5 20 1 12 1 12Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg>
+            <svg class="eye-off" viewBox="0 0 24 24" fill="none"><path d="M17.94 17.94C16.23 19.24 14.24 20 12 20C5 20 1 12 1 12C2.24 9.68 3.9 7.75 5.86 6.35M9.9 4.24C10.58 4.09 11.28 4 12 4C19 4 23 12 23 12C22.39 13.16 21.6 14.27 20.68 15.27M14.12 14.12C13.62 14.63 12.85 15 12 15C10.34 15 9 13.66 9 12C9 11.15 9.37 10.38 9.88 9.88" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M1 1L23 23" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+        </div>
       </div>
       <button type="submit" class="btn-primary" id="signupBtn">Создать аккаунт</button>
     </form>
@@ -496,7 +542,8 @@
     signInWithPopup,
     updateProfile,
     onAuthStateChanged,
-    signOut
+    signOut,
+    deleteUser
   } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
   import {
     getFirestore,
@@ -582,6 +629,22 @@
     document.getElementById("formLogin").classList.toggle("hidden", !isLogin);
     document.getElementById("formSignup").classList.toggle("hidden", isLogin);
     hideMsg();
+  }
+
+  // ---------- ПОКАЗАТЬ/СКРЫТЬ ПАРОЛЬ ----------
+  window.togglePasswordVisibility = function(inputId, btn) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const showing = input.type === "password";
+    input.type = showing ? "text" : "password";
+    btn.classList.toggle("showing", showing);
+    btn.title = showing ? "Скрыть пароль" : "Показать пароль";
+    btn.setAttribute("aria-label", btn.title);
+    // Возвращаем фокус и курсор в конец поля — иначе после клика по кнопке
+    // курсор теряется, и человеку пришлось бы кликать в поле заново.
+    input.focus();
+    const pos = input.value.length;
+    input.setSelectionRange(pos, pos);
   }
 
   function showMsg(text, type) {
@@ -692,23 +755,43 @@
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span>Создаём аккаунт…';
 
+    let cred = null;
     try {
-      // Проверяем ДО создания Auth-аккаунта: если email уже привязан
-      // к какому-то профилю в Firestore (неважно, каким методом входа
-      // он был создан — email/пароль или Google), не даём создать дубль.
+      // ВАЖНО: раньше проверка на дубль email делалась ДО этого вызова —
+      // но Firestore Security Rules требуют request.auth != null для чтения
+      // users, а до создания аккаунта пользователь ещё не авторизован.
+      // Из-за этого регистрация всегда падала с permission-denied ещё до
+      // того, как вообще пыталась создать аккаунт (Google-вход эту же
+      // проверку делает уже ПОСЛЕ signInWithPopup, когда сессия уже есть —
+      // поэтому он и работал, а обычная регистрация — нет).
+      // Теперь сначала создаём Auth-аккаунт (это и авторизует сессию),
+      // а проверку на дубль — как и в handleGoogle — переносим после.
+      cred = await createUserWithEmailAndPassword(auth, email, password);
+
+      // Дубль по email возможен только если человек уже регистрировался
+      // раньше ДРУГИМ способом (например, через Google) — email/пароль-дубль
+      // с тем же email Firebase Auth и так не даст создать (упадёт с
+      // auth/email-already-in-use чуть выше, в catch).
       const alreadyExists = await emailAlreadyRegistered(email);
       if (alreadyExists) {
-        showMsg("Ишт email уже йазин йолш йу. Юг1 хьажа \"Войти\".", "error");
+        await deleteUser(cred.user);
+        showMsg("Ишт email уже йазин йолш йу через другой способ входа (например, Google). Юг1 хьажа обычный вход.", "error");
         btn.disabled = false;
         btn.textContent = "Создать аккаунт";
         return false;
       }
 
-      const cred = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(cred.user, { displayName: name });
       await ensureUserProfile(cred.user, name);
       window.location.href = "chat.html";
     } catch (err) {
+      // Если что-то пошло не так уже ПОСЛЕ создания аккаунта (например,
+      // ensureUserProfile упал на сети) — не оставляем висячий Auth-аккаунт
+      // без профиля: следующая попытка регистрации с тем же email иначе
+      // упёрлась бы в auth/email-already-in-use на ровном месте.
+      if (cred?.user) {
+        try { await deleteUser(cred.user); } catch (_) { /* не критично, просто подчистка */ }
+      }
       showMsg(friendlyError(err.code), "error");
       btn.disabled = false;
       btn.textContent = "Создать аккаунт";
