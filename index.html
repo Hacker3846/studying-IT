@@ -236,6 +236,61 @@
     color: var(--accent-dark);
   }
 
+  /* ===== БАННЕР АКТИВНОЙ СЕССИИ ===== */
+  .session-banner {
+    display: none;
+    background: #eaf0fb;
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+    font-size: 13.5px;
+    line-height: 1.5;
+  }
+
+  html[data-theme="dark"] .session-banner {
+    background: #1c2540;
+  }
+
+  .session-banner.show { display: block; }
+
+  .session-banner .who {
+    font-weight: 700;
+    color: var(--accent-dark);
+    margin-bottom: 10px;
+  }
+
+  .session-banner .actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .session-banner .actions button {
+    flex: 1;
+    padding: 9px 0;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+  }
+
+  .session-banner .btn-continue {
+    background: var(--accent);
+    color: white;
+  }
+
+  .session-banner .btn-continue:hover { background: var(--accent-dark); }
+
+  .session-banner .btn-switch {
+    background: var(--card);
+    color: var(--ink);
+    border: 1.5px solid var(--line) !important;
+  }
+
+  .session-banner .btn-switch:hover { border-color: var(--ink) !important; }
+
   .foot {
     text-align: center;
     color: var(--muted);
@@ -291,6 +346,14 @@
     <div class="mark-text">Мессенджер</div>
   </div>
   <p class="tagline">Общий чат учеников 8-го училища</p>
+
+  <div class="session-banner" id="sessionBanner">
+    <div class="who" id="sessionBannerWho"></div>
+    <div class="actions">
+      <button class="btn-continue" onclick="goToChat()">Продолжить</button>
+      <button class="btn-switch" onclick="switchAccount()">Выйти и войти другим</button>
+    </div>
+  </div>
 
   <div class="card">
     <div class="tabs">
@@ -352,7 +415,8 @@
     GoogleAuthProvider,
     signInWithPopup,
     updateProfile,
-    onAuthStateChanged
+    onAuthStateChanged,
+    signOut
   } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
   import {
     getFirestore,
@@ -378,12 +442,32 @@
   const auth = getAuth(app);
   const db = getFirestore(app);
 
-  // Если уже залогинен — сразу перекидываем в чат
+  // Раньше здесь был мгновенный window.location.href = "chat.html" при
+  // наличии активной сессии Firebase Auth в браузере. Из-за этого форму
+  // входа было физически невозможно увидеть на устройстве, где уже кто-то
+  // логинился: страница сразу перекидывала в chat.html под СТАРЫМ
+  // аккаунтом, даже если человек пытался ввести данные другого аккаунта.
+  // Теперь вместо мгновенного редиректа показываем баннер "Вы вошли как…"
+  // с явным выбором — продолжить или выйти и залогиниться другим.
   onAuthStateChanged(auth, (user) => {
+    const banner = document.getElementById("sessionBanner");
+    const who = document.getElementById("sessionBannerWho");
     if (user) {
-      window.location.href = "chat.html";
+      who.textContent = "Вы уже вошли как " + (user.email || user.displayName || "пользователь") + ".";
+      banner.classList.add("show");
+    } else {
+      banner.classList.remove("show");
     }
   });
+
+  window.goToChat = function() {
+    window.location.href = "chat.html";
+  }
+
+  window.switchAccount = async function() {
+    await signOut(auth);
+    document.getElementById("sessionBanner").classList.remove("show");
+  }
 
   // ---------- ТЕМА ----------
   function updateThemeFab() {

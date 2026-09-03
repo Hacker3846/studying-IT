@@ -403,6 +403,135 @@
   .msg-row.me .upload-progress { border-bottom-right-radius: 4px; }
   .msg-row.them .upload-progress { border-bottom-left-radius: 4px; }
 
+  /* ===== ДЕЙСТВИЯ НАД СООБЩЕНИЕМ (ответить / удалить) ===== */
+  .msg-row { position: relative; }
+
+  .msg-bubble-wrap {
+    position: relative;
+    cursor: pointer;
+  }
+
+  .msg-action-menu {
+    position: absolute;
+    top: -34px;
+    z-index: 5;
+    display: none;
+    gap: 4px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 4px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+  }
+
+  .msg-row.me .msg-action-menu { right: 0; }
+  .msg-row.them .msg-action-menu { left: 0; }
+
+  .msg-action-menu.show { display: flex; }
+
+  .msg-action-btn {
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 6px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .msg-action-btn:hover { background: var(--paper); }
+  .msg-action-btn.danger { color: var(--error, #c0392b); }
+
+  /* Цитата ответа внутри пузыря сообщения */
+  .msg-reply-quote {
+    display: block;
+    border-left: 3px solid rgba(255,255,255,0.5);
+    padding: 3px 8px;
+    margin-bottom: 6px;
+    font-size: 12.5px;
+    line-height: 1.3;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.12);
+    max-height: 40px;
+    overflow: hidden;
+  }
+
+  .msg-row.them .msg-reply-quote {
+    border-left-color: var(--accent);
+    background: var(--paper);
+  }
+
+  .msg-reply-quote .reply-name {
+    display: block;
+    font-weight: 700;
+    color: inherit;
+    opacity: 0.9;
+  }
+
+  .msg-row.them .msg-reply-quote .reply-name { color: var(--accent); }
+
+  .msg-reply-quote .reply-text {
+    display: block;
+    opacity: 0.85;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Плашка "отвечаю на..." над полем ввода */
+  #replyPreview {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    border-top: 1px solid var(--line);
+    background: var(--paper);
+  }
+
+  #replyPreview.show { display: flex; }
+
+  #replyPreview .reply-bar {
+    width: 3px;
+    align-self: stretch;
+    background: var(--accent);
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  #replyPreview .reply-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  #replyPreview .reply-info-name {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  #replyPreview .reply-info-text {
+    font-size: 13px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #replyPreview .reply-cancel {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px 6px;
+    flex-shrink: 0;
+  }
+
+  #replyPreview .reply-cancel:hover { color: var(--ink); }
+
   #composer {
     display: flex;
     align-items: flex-end;
@@ -890,6 +1019,7 @@
     setDoc,
     getDoc,
     getDocs,
+    deleteDoc,
     serverTimestamp,
     limit,
     arrayUnion,
@@ -921,6 +1051,10 @@
   let lastChats = [];           // последний загруженный список чатов (для поиска)
   let chatSearchQuery = "";
   let userSearchQuery = "";
+  let replyingTo = null;   // { id, text, senderName, type } — сообщение, на которое сейчас отвечаем
+  let openMenuMessageId = null; // id сообщения, у которого сейчас открыто меню "Ответить/Удалить"
+  let lastRenderedMessages = {}; // msgId -> data сообщения из последнего снапшота текущего чата
+  let deleteWindowRefreshInterval = null;
 
   // ---------- CLOUDINARY (хранение фото и голосовых) ----------
   const CLOUDINARY_CLOUD_NAME = "ctcszg0j";
@@ -1247,6 +1381,8 @@
   // ---------- ОТКРЫТИЕ ЧАТА ----------
   window.openChat = async function(chatId, chatData) {
     currentChatId = chatId;
+    replyingTo = null;
+    if (deleteWindowRefreshInterval) { clearInterval(deleteWindowRefreshInterval); deleteWindowRefreshInterval = null; }
     document.getElementById("app").classList.add("chat-open");
 
     document.querySelectorAll(".chat-item").forEach(el => el.classList.remove("active"));
@@ -1261,6 +1397,14 @@
         </div>
       </div>
       <div id="messages"></div>
+      <div id="replyPreview">
+        <div class="reply-bar"></div>
+        <div class="reply-info">
+          <div class="reply-info-name" id="replyPreviewName"></div>
+          <div class="reply-info-text" id="replyPreviewText"></div>
+        </div>
+        <button class="reply-cancel" onclick="cancelReply()" title="Отменить ответ">×</button>
+      </div>
       <div id="composer">
         <button class="icon-btn" onclick="document.getElementById('fileInput').click()" title="Прикрепить фото">
           <svg viewBox="0 0 24 24" fill="none"><path d="M21 15V19C21 20.1 20.1 21 19 21H5C3.9 21 3 20.1 3 19V5C3 3.9 3.9 3 5 3H12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9" cy="9" r="2" stroke="currentColor" stroke-width="2"/><path d="M3 17L8 12L11 15L16 10L21 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 3V9M15 6H21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -1326,6 +1470,8 @@
 
   function listenToMessages(chatId) {
     if (unsubscribeMessages) unsubscribeMessages();
+    openMenuMessageId = null;
+    lastRenderedMessages = {};
 
     const q = query(
       collection(db, "chats", chatId, "messages"),
@@ -1338,12 +1484,16 @@
       if (!box) return;
       box.innerHTML = "";
       let lastSender = null;
+      lastRenderedMessages = {};
 
       snap.forEach(d => {
         const msg = d.data();
+        const msgId = d.id;
+        lastRenderedMessages[msgId] = msg;
         const isMe = msg.senderId === currentUser.uid;
         const row = document.createElement("div");
         row.className = "msg-row " + (isMe ? "me" : "them");
+        row.dataset.id = msgId;
 
         let senderLabel = "";
         if (!isMe && msg.senderId !== lastSender) {
@@ -1353,44 +1503,227 @@
 
         const time = msg.createdAt?.toDate ? formatTime(msg.createdAt.toDate()) : "";
 
-        row.appendChild(renderBubble(msg, senderLabel, time));
+        row.appendChild(renderBubble(msg, msgId, senderLabel, time, isMe));
         box.appendChild(row);
       });
 
       box.scrollTop = box.scrollHeight;
     });
+
+    if (deleteWindowRefreshInterval) clearInterval(deleteWindowRefreshInterval);
+    deleteWindowRefreshInterval = setInterval(() => {
+      // Просто перерисовываем текущий список сообщений из уже загруженных
+      // данных — это уберёт кнопку "Удалить" у сообщений, которым
+      // исполнилось 10 минут, без лишнего запроса к Firestore.
+      const box = document.getElementById("messages");
+      if (!box || !currentChatId) return;
+      const anyOld = Object.values(lastRenderedMessages).some(
+        m => m.senderId === currentUser.uid && !messageIsWithinDeleteWindow(m)
+      );
+      if (anyOld) rerenderMessagesFromCache();
+    }, 30000);
   }
 
-  function renderBubble(msg, senderLabelHTML, time) {
+  function rerenderMessagesFromCache() {
+    const box = document.getElementById("messages");
+    if (!box) return;
+    const scrollBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+    box.innerHTML = "";
+    let lastSender = null;
+    Object.entries(lastRenderedMessages).forEach(([msgId, msg]) => {
+      const isMe = msg.senderId === currentUser.uid;
+      const row = document.createElement("div");
+      row.className = "msg-row " + (isMe ? "me" : "them");
+      row.dataset.id = msgId;
+
+      let senderLabel = "";
+      if (!isMe && msg.senderId !== lastSender) {
+        senderLabel = `<div class="msg-sender">${escapeHtml(allUsers[msg.senderId]?.name || "Пользователь")}</div>`;
+      }
+      lastSender = msg.senderId;
+
+      const time = msg.createdAt?.toDate ? formatTime(msg.createdAt.toDate()) : "";
+      row.appendChild(renderBubble(msg, msgId, senderLabel, time, isMe));
+      box.appendChild(row);
+    });
+    if (scrollBottom) box.scrollTop = box.scrollHeight;
+  }
+
+  // Короткий превью-текст сообщения любого типа — используется и в цитате
+  // ответа внутри пузыря, и в плашке "отвечаю на..." над полем ввода.
+  function messagePreviewText(msg) {
+    if (msg.type === "image") return "📷 Фото";
+    if (msg.type === "voice") return "🎤 Голосовое сообщение";
+    return msg.text || "";
+  }
+
+  function renderReplyQuoteHTML(msg) {
+    if (!msg.replyTo) return "";
+    const name = escapeHtml(msg.replyTo.senderName || "Пользователь");
+    const text = escapeHtml(msg.replyTo.text || "");
+    return `<div class="msg-reply-quote" onclick="event.stopPropagation(); scrollToMessage('${msg.replyTo.id}')">
+      <span class="reply-name">${name}</span>
+      <span class="reply-text">${text}</span>
+    </div>`;
+  }
+
+  function renderBubble(msg, msgId, senderLabelHTML, time, isMe) {
     const wrap = document.createElement("div");
+    const replyQuoteHTML = renderReplyQuoteHTML(msg);
+
+    // Меню действий: "Ответить" доступно всегда, "Удалить" — только для
+    // своих сообщений и только пока не прошло 10 минут с отправки.
+    const canDelete = isMe && messageIsWithinDeleteWindow(msg);
+    const menuHTML = `
+      <div class="msg-action-menu" id="menu-${msgId}">
+        <button class="msg-action-btn" onclick="event.stopPropagation(); startReply('${msgId}')">↩ Ответить</button>
+        ${canDelete ? `<button class="msg-action-btn danger" onclick="event.stopPropagation(); deleteMessage('${msgId}')">🗑 Удалить</button>` : ""}
+      </div>
+    `;
 
     if (msg.type === "image") {
       wrap.innerHTML = `
         ${senderLabelHTML}
-        <img class="bubble-image" src="${msg.mediaUrl}" onclick="openLightbox('${msg.mediaUrl}')">
+        <div class="msg-bubble-wrap" onclick="toggleMsgMenu('${msgId}')">
+          ${menuHTML}
+          ${replyQuoteHTML}
+          <img class="bubble-image" src="${msg.mediaUrl}" onclick="event.stopPropagation(); openLightbox('${msg.mediaUrl}')">
+        </div>
         <div class="msg-time">${time}</div>
       `;
     } else if (msg.type === "voice") {
       const dur = msg.duration ? formatDuration(msg.duration) : "0:00";
       wrap.innerHTML = `
         ${senderLabelHTML}
-        <div class="voice-bubble" data-url="${msg.mediaUrl}">
-          <button class="voice-play-btn" onclick="toggleVoicePlay(this)">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5V19L19 12L8 5Z"/></svg>
-          </button>
-          <div class="voice-track"><div class="voice-track-fill"></div></div>
-          <div class="voice-duration">${dur}</div>
+        <div class="msg-bubble-wrap" onclick="toggleMsgMenu('${msgId}')">
+          ${menuHTML}
+          <div class="voice-bubble" data-url="${msg.mediaUrl}">
+            ${replyQuoteHTML}
+            <button class="voice-play-btn" onclick="event.stopPropagation(); toggleVoicePlay(this)">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5V19L19 12L8 5Z"/></svg>
+            </button>
+            <div class="voice-track"><div class="voice-track-fill"></div></div>
+            <div class="voice-duration">${dur}</div>
+          </div>
         </div>
         <div class="msg-time">${time}</div>
       `;
     } else {
       wrap.innerHTML = `
         ${senderLabelHTML}
-        <div class="bubble">${escapeHtml(msg.text)}</div>
+        <div class="msg-bubble-wrap" onclick="toggleMsgMenu('${msgId}')">
+          ${menuHTML}
+          <div class="bubble">${replyQuoteHTML}${escapeHtml(msg.text)}</div>
+        </div>
         <div class="msg-time">${time}</div>
       `;
     }
     return wrap;
+  }
+
+  // ---------- УДАЛЕНИЕ / ОТВЕТ НА СООБЩЕНИЕ ----------
+  const DELETE_WINDOW_MS = 10 * 60 * 1000; // 10 минут
+
+  function messageIsWithinDeleteWindow(msg) {
+    if (!msg.createdAt?.toDate) return false; // ещё не подтверждено сервером — на всякий случай не даём удалить
+    return (Date.now() - msg.createdAt.toDate().getTime()) < DELETE_WINDOW_MS;
+  }
+
+  window.toggleMsgMenu = function(msgId) {
+    const menu = document.getElementById("menu-" + msgId);
+    if (!menu) return;
+    const isOpen = menu.classList.contains("show");
+    document.querySelectorAll(".msg-action-menu.show").forEach(m => m.classList.remove("show"));
+    if (!isOpen) {
+      menu.classList.add("show");
+      openMenuMessageId = msgId;
+    } else {
+      openMenuMessageId = null;
+    }
+  }
+
+  // Закрывать открытое меню при клике куда угодно ещё
+  document.addEventListener("click", (e) => {
+    if (!openMenuMessageId) return;
+    if (e.target.closest(".msg-bubble-wrap")) return;
+    document.querySelectorAll(".msg-action-menu.show").forEach(m => m.classList.remove("show"));
+    openMenuMessageId = null;
+  });
+
+  window.startReply = function(msgId) {
+    const row = document.querySelector(`.msg-row[data-id="${msgId}"]`);
+    document.querySelectorAll(".msg-action-menu.show").forEach(m => m.classList.remove("show"));
+    openMenuMessageId = null;
+    if (!row) return;
+
+    // Достаём данные сообщения заново из DOM недостаточно надёжно для текста —
+    // проще взять их из lastRenderedMessages, который наполняется в listenToMessages.
+    const msg = lastRenderedMessages[msgId];
+    if (!msg) return;
+
+    const isMe = msg.senderId === currentUser.uid;
+    const senderName = isMe ? "Вы" : (allUsers[msg.senderId]?.name || "Пользователь");
+
+    replyingTo = {
+      id: msgId,
+      text: messagePreviewText(msg),
+      senderName,
+      type: msg.type || "text"
+    };
+
+    showReplyPreview();
+    const input = document.getElementById("msgInput");
+    if (input) input.focus();
+  }
+
+  window.cancelReply = function() {
+    replyingTo = null;
+    const preview = document.getElementById("replyPreview");
+    if (preview) preview.classList.remove("show");
+  }
+
+  function showReplyPreview() {
+    if (!replyingTo) return;
+    const preview = document.getElementById("replyPreview");
+    const nameEl = document.getElementById("replyPreviewName");
+    const textEl = document.getElementById("replyPreviewText");
+    if (!preview || !nameEl || !textEl) return;
+    nameEl.textContent = replyingTo.senderName;
+    textEl.textContent = replyingTo.text;
+    preview.classList.add("show");
+  }
+
+  window.scrollToMessage = function(msgId) {
+    const row = document.querySelector(`.msg-row[data-id="${msgId}"]`);
+    if (!row) return;
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    row.style.transition = "background-color 0.3s ease";
+    const bubble = row.querySelector(".bubble, .voice-bubble, .bubble-image");
+    if (bubble) {
+      const original = bubble.style.filter;
+      bubble.style.filter = "brightness(0.85)";
+      setTimeout(() => { bubble.style.filter = original; }, 400);
+    }
+  }
+
+  window.deleteMessage = async function(msgId) {
+    document.querySelectorAll(".msg-action-menu.show").forEach(m => m.classList.remove("show"));
+    openMenuMessageId = null;
+
+    const msg = lastRenderedMessages[msgId];
+    if (!msg) return;
+    if (!messageIsWithinDeleteWindow(msg)) {
+      alert("Прошло больше 10 минут — удалить это сообщение уже нельзя.");
+      return;
+    }
+    if (!confirm("Удалить это сообщение?")) return;
+
+    try {
+      await deleteDoc(doc(db, "chats", currentChatId, "messages", msgId));
+      if (replyingTo && replyingTo.id === msgId) cancelReply();
+    } catch (err) {
+      alert("Не удалось удалить сообщение: " + err.message);
+    }
   }
 
   function formatDuration(seconds) {
@@ -1478,16 +1811,27 @@
     const text = input.value.trim();
     if (!text || !currentChatId) return;
 
+    // Если сейчас отвечаем на сообщение — прикладываем компактную ссылку
+    // на него (id + имя автора + короткий превью текста). Полный документ
+    // оригинала не дублируем, чтобы не раздувать сообщение.
+    const replySnapshot = replyingTo
+      ? { id: replyingTo.id, text: replyingTo.text, senderName: replyingTo.senderName }
+      : null;
+
     input.value = "";
     input.style.height = "auto";
+    cancelReply();
     updateComposerButtons();
 
     try {
-      await addDoc(collection(db, "chats", currentChatId, "messages"), {
+      const payload = {
         text,
         senderId: currentUser.uid,
         createdAt: serverTimestamp()
-      });
+      };
+      if (replySnapshot) payload.replyTo = replySnapshot;
+
+      await addDoc(collection(db, "chats", currentChatId, "messages"), payload);
       await setDoc(doc(db, "chats", currentChatId), {
         lastMessage: text,
         lastMessageAt: serverTimestamp()
@@ -1585,16 +1929,20 @@
         const snap = await getDoc(ref);
         openChat(ref.id, { id: ref.id, ...snap.data() });
       } else {
-        // Личный чат — проверяем, нет ли уже такого
+        // Личный чат — проверяем, нет ли уже такого.
+        // members записываем в ТОМ ЖЕ отсортированном порядке, что и id
+        // документа — это требуют новые правила Firestore и это же
+        // исключает появление "второго" чата для той же пары людей.
         const otherId = ids[0];
-        const existingId = [currentUser.uid, otherId].sort().join("_");
+        const sortedMembers = [currentUser.uid, otherId].sort();
+        const existingId = sortedMembers.join("_");
         const existingRef = doc(db, "chats", existingId);
         const existingSnap = await getDoc(existingRef);
 
         if (!existingSnap.exists()) {
           await setDoc(existingRef, {
             type: "personal",
-            members: [currentUser.uid, otherId],
+            members: sortedMembers,
             createdAt: serverTimestamp()
           });
         }
