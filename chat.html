@@ -1290,6 +1290,7 @@
     input.addEventListener("input", () => {
       input.style.height = "auto";
       input.style.height = Math.min(input.scrollHeight, 120) + "px";
+      updateComposerButtons();
     });
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
@@ -1297,6 +1298,7 @@
         sendMessage();
       }
     });
+    updateComposerButtons();
 
     listenToMessages(chatId);
     lastChats = await currentChatsSnapshotFallback();
@@ -1454,6 +1456,19 @@
     document.getElementById("lightbox").classList.remove("show");
   }
 
+  // Показываем кнопку отправки, если в поле есть хоть один символ,
+  // иначе показываем кнопку записи голосового — они занимают одно и то же место.
+  function updateComposerButtons() {
+    const input = document.getElementById("msgInput");
+    const micBtn = document.getElementById("micBtn");
+    const sendBtn = document.getElementById("sendBtn");
+    if (!input || !micBtn || !sendBtn) return;
+
+    const hasText = input.value.trim().length > 0;
+    micBtn.style.display = hasText ? "none" : "flex";
+    sendBtn.style.display = hasText ? "flex" : "none";
+  }
+
   function formatTime(date) {
     return date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
   }
@@ -1465,6 +1480,7 @@
 
     input.value = "";
     input.style.height = "auto";
+    updateComposerButtons();
 
     try {
       await addDoc(collection(db, "chats", currentChatId, "messages"), {
@@ -1705,6 +1721,7 @@
     if (micBtn) micBtn.classList.remove("recording");
     if (bar) bar.classList.remove("show");
     if (input) input.style.display = "";
+    updateComposerButtons();
   }
 
   window.cancelRecording = function() {
@@ -1743,7 +1760,13 @@
       if (box) { box.appendChild(placeholder); box.scrollTop = box.scrollHeight; }
 
       try {
-        const file = new File([blob], "voice.webm", { type: "audio/webm" });
+        // Раньше файл всегда назывался "voice.webm" — при определённых настройках
+        // upload_preset в Cloudinary это приводило к перезаписи предыдущего
+        // голосового новым (или переиспользованию старого URL), из-за чего
+        // все голосовые сообщения в итоге проигрывали один и тот же звук.
+        // Уникальное имя на каждую запись решает проблему.
+        const uniqueName = `voice_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.webm`;
+        const file = new File([blob], uniqueName, { type: "audio/webm" });
         const url = await uploadToCloudinary(file, CLOUDINARY_AUDIO_URL);
         await addDoc(collection(db, "chats", currentChatId, "messages"), {
           type: "voice",
