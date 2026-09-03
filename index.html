@@ -7,23 +7,12 @@
 <script>
   (function() {
     var saved = localStorage.getItem("theme");
-    if (saved === "dark") document.documentElement.setAttribute("data-theme", "dark");
+    if (saved === "light") document.documentElement.setAttribute("data-theme", "light");
   })();
 </script>
 
 <style>
   :root {
-    --ink: #1a1d1f;
-    --paper: #f6f4ef;
-    --card: #ffffff;
-    --accent: #3454d1;
-    --accent-dark: #2540a8;
-    --line: #e2ded3;
-    --muted: #8a8578;
-    --error: #c0392b;
-  }
-
-  html[data-theme="dark"] {
     --ink: #eceae4;
     --paper: #15161a;
     --card: #1e2025;
@@ -32,6 +21,17 @@
     --line: #2f3138;
     --muted: #85848c;
     --error: #ff6b6b;
+  }
+
+  html[data-theme="light"] {
+    --ink: #1a1d1f;
+    --paper: #f6f4ef;
+    --card: #ffffff;
+    --accent: #3454d1;
+    --accent-dark: #2540a8;
+    --line: #e2ded3;
+    --muted: #8a8578;
+    --error: #c0392b;
   }
 
   * { box-sizing: border-box; }
@@ -53,11 +53,85 @@
     min-height: 100vh;
     min-height: 100dvh;
     padding: 24px;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  /* ===== ФОНОВЫЙ ГРАДИЕНТ "СИНЕЕ ПЛАМЯ" =====
+     Приглушённая атмосферная подсветка позади карточки входа. Видна только
+     в тёмной теме (в светлой отключается — на бежевом фоне будет чужеродно
+     смотреться); сама карточка остаётся полностью читаемой поверх неё. */
+  .bg-fire {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+    opacity: 0.55;
+  }
+
+  html[data-theme="light"] .bg-fire { display: none; }
+
+  .bg-fire::before {
+    content: "";
+    position: absolute;
+    left: -15%;
+    bottom: -55%;
+    width: 130%;
+    height: 125%;
+
+    background:
+      radial-gradient(ellipse at 12% 82%,
+        rgba(32, 78, 125, .95) 0%,
+        rgba(27, 60, 98, .65) 20%,
+        transparent 48%),
+      radial-gradient(ellipse at 35% 70%,
+        rgba(67, 108, 148, .82) 0%,
+        rgba(37, 73, 108, .5) 23%,
+        transparent 51%),
+      radial-gradient(ellipse at 55% 78%,
+        rgba(42, 91, 145, .95) 0%,
+        rgba(27, 61, 99, .58) 24%,
+        transparent 51%),
+      radial-gradient(ellipse at 77% 68%,
+        rgba(71, 111, 150, .78) 0%,
+        rgba(32, 69, 105, .45) 22%,
+        transparent 49%),
+      radial-gradient(ellipse at 96% 82%,
+        rgba(28, 72, 120, .9) 0%,
+        rgba(22, 50, 82, .5) 25%,
+        transparent 50%);
+
+    filter: blur(30px);
+    transform-origin: 50% 100%;
+    animation: bgFlame 11s ease-in-out infinite alternate;
+  }
+
+  .bg-fire::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(to top,
+        rgba(55, 91, 122, .16),
+        transparent 42%),
+      radial-gradient(ellipse at 50% 100%,
+        rgba(42, 88, 135, .16),
+        transparent 55%);
+  }
+
+  @keyframes bgFlame {
+    0% { transform: translate3d(-3%, 2%, 0) scale(.98, .88); }
+    30% { transform: translate3d(2%, -2%, 0) scale(1.03, 1.04); }
+    65% { transform: translate3d(-2%, 1%, 0) scale(1.06, .96); }
+    100% { transform: translate3d(4%, -4%, 0) scale(1.02, 1.08); }
   }
 
   .wrap {
     width: 100%;
     max-width: 380px;
+    position: relative;
+    z-index: 1;
   }
 
   .mark {
@@ -227,19 +301,22 @@
   .msg.show { display: block; }
 
   .msg.error {
-    background: #fbeae8;
+    background: #3a2422;
     color: var(--error);
   }
 
   .msg.info {
-    background: #eaf0fb;
+    background: #1c2540;
     color: var(--accent-dark);
   }
+
+  html[data-theme="light"] .msg.error { background: #fbeae8; }
+  html[data-theme="light"] .msg.info { background: #eaf0fb; }
 
   /* ===== БАННЕР АКТИВНОЙ СЕССИИ ===== */
   .session-banner {
     display: none;
-    background: #eaf0fb;
+    background: #1c2540;
     border: 1px solid var(--accent);
     border-radius: 12px;
     padding: 14px 16px;
@@ -248,8 +325,8 @@
     line-height: 1.5;
   }
 
-  html[data-theme="dark"] .session-banner {
-    background: #1c2540;
+  html[data-theme="light"] .session-banner {
+    background: #eaf0fb;
   }
 
   .session-banner.show { display: block; }
@@ -330,6 +407,7 @@
     align-items: center;
     justify-content: center;
     font-size: 17px;
+    z-index: 2;
     transition: border-color 0.15s ease, background 0.2s ease;
   }
 
@@ -338,7 +416,9 @@
 </head>
 <body>
 
-<button class="theme-fab" id="themeFab" onclick="toggleTheme()" title="Переключить тему">☀️</button>
+<div class="bg-fire"></div>
+
+<button class="theme-fab" id="themeFab" onclick="toggleTheme()" title="Переключить тему">🌙</button>
 
 <div class="wrap">
   <div class="mark">
@@ -470,15 +550,22 @@
   }
 
   // ---------- ТЕМА ----------
+  // Тёмная тема — дефолт (нет атрибута data-theme на <html>).
+  // Светлая тема включается явно через data-theme="light" и запоминается.
   function updateThemeFab() {
     const fab = document.getElementById("themeFab");
     if (!fab) return;
-    fab.textContent = document.documentElement.getAttribute("data-theme") === "dark" ? "🌙" : "☀️";
+    fab.textContent = document.documentElement.getAttribute("data-theme") === "light" ? "☀️" : "🌙";
   }
   window.toggleTheme = function() {
-    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-    document.documentElement.setAttribute("data-theme", isDark ? "light" : "dark");
-    localStorage.setItem("theme", isDark ? "light" : "dark");
+    const isLight = document.documentElement.getAttribute("data-theme") === "light";
+    if (isLight) {
+      document.documentElement.removeAttribute("data-theme");
+      localStorage.setItem("theme", "dark");
+    } else {
+      document.documentElement.setAttribute("data-theme", "light");
+      localStorage.setItem("theme", "light");
+    }
     updateThemeFab();
   }
   updateThemeFab();
@@ -527,7 +614,10 @@
       await setDoc(userRef, {
         name: displayNameOverride || user.displayName || user.email.split("@")[0],
         email: user.email,
-        photoURL: user.photoURL || null,
+        // Аватарку из Google-аккаунта намеренно НЕ подставляем автоматически —
+        // пользователь сам решает, ставить фото профиля или нет (через
+        // экран профиля в chat.html). Поле остаётся пустым до явной загрузки.
+        photoURL: null,
         createdAt: serverTimestamp()
       });
     }

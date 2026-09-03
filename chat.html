@@ -7,24 +7,12 @@
 <script>
   (function() {
     var saved = localStorage.getItem("theme");
-    if (saved === "dark") document.documentElement.setAttribute("data-theme", "dark");
+    if (saved === "light") document.documentElement.setAttribute("data-theme", "light");
   })();
 </script>
 
 <style>
   :root {
-    --ink: #1a1d1f;
-    --paper: #f6f4ef;
-    --card: #ffffff;
-    --accent: #3454d1;
-    --accent-dark: #2540a8;
-    --line: #e2ded3;
-    --muted: #8a8578;
-    --bubble-me: #3454d1;
-    --bubble-them: #ffffff;
-  }
-
-  html[data-theme="dark"] {
     --ink: #eceae4;
     --paper: #15161a;
     --card: #1e2025;
@@ -34,6 +22,18 @@
     --muted: #85848c;
     --bubble-me: #3454d1;
     --bubble-them: #262930;
+  }
+
+  html[data-theme="light"] {
+    --ink: #1a1d1f;
+    --paper: #f6f4ef;
+    --card: #ffffff;
+    --accent: #3454d1;
+    --accent-dark: #2540a8;
+    --line: #e2ded3;
+    --muted: #8a8578;
+    --bubble-me: #3454d1;
+    --bubble-them: #ffffff;
   }
 
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -49,11 +49,85 @@
     transition: background 0.2s ease, color 0.2s ease;
   }
 
+  /* ===== ФОНОВЫЙ ГРАДИЕНТ "СИНЕЕ ПЛАМЯ" =====
+     Тот же фон, что на странице входа, но приглушённее (умеренная
+     видимость — не должен мешать читать переписку). Показывается только
+     в тёмной теме: в светлой отключается, чтобы не выбиваться на
+     светлом фоне. Сайдбар, шапки, поле ввода и пузыри собеседника сделаны
+     полупрозрачными, чтобы пламя было видно сквозь интерфейс. */
+  .bg-fire {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+    opacity: 0.32;
+  }
+
+  html[data-theme="light"] .bg-fire { display: none; }
+
+  .bg-fire::before {
+    content: "";
+    position: absolute;
+    left: -15%;
+    bottom: -55%;
+    width: 130%;
+    height: 125%;
+
+    background:
+      radial-gradient(ellipse at 12% 82%,
+        rgba(32, 78, 125, .95) 0%,
+        rgba(27, 60, 98, .65) 20%,
+        transparent 48%),
+      radial-gradient(ellipse at 35% 70%,
+        rgba(67, 108, 148, .82) 0%,
+        rgba(37, 73, 108, .5) 23%,
+        transparent 51%),
+      radial-gradient(ellipse at 55% 78%,
+        rgba(42, 91, 145, .95) 0%,
+        rgba(27, 61, 99, .58) 24%,
+        transparent 51%),
+      radial-gradient(ellipse at 77% 68%,
+        rgba(71, 111, 150, .78) 0%,
+        rgba(32, 69, 105, .45) 22%,
+        transparent 49%),
+      radial-gradient(ellipse at 96% 82%,
+        rgba(28, 72, 120, .9) 0%,
+        rgba(22, 50, 82, .5) 25%,
+        transparent 50%);
+
+    filter: blur(30px);
+    transform-origin: 50% 100%;
+    animation: bgFlame 11s ease-in-out infinite alternate;
+  }
+
+  .bg-fire::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(to top,
+        rgba(55, 91, 122, .16),
+        transparent 42%),
+      radial-gradient(ellipse at 50% 100%,
+        rgba(42, 88, 135, .16),
+        transparent 55%);
+  }
+
+  @keyframes bgFlame {
+    0% { transform: translate3d(-3%, 2%, 0) scale(.98, .88); }
+    30% { transform: translate3d(2%, -2%, 0) scale(1.03, 1.04); }
+    65% { transform: translate3d(-2%, 1%, 0) scale(1.06, .96); }
+    100% { transform: translate3d(4%, -4%, 0) scale(1.02, 1.08); }
+  }
+
   #app {
     height: 100vh;
     height: 100dvh;
     display: flex;
     overflow: hidden;
+    position: relative;
+    z-index: 1;
   }
 
   /* ===== СПИСОК ЧАТОВ ===== */
@@ -66,6 +140,8 @@
     flex-direction: column;
     flex-shrink: 0;
   }
+
+  html:not([data-theme="light"]) #sidebar { background: color-mix(in srgb, var(--card) 82%, transparent); }
 
   #sidebarHeader {
     padding: 16px 18px 12px 18px;
@@ -186,7 +262,8 @@
   }
 
   .chat-item:hover { background: var(--paper); }
-  .chat-item.active { background: #eaf0fb; }
+  .chat-item.active { background: #1c2540; }
+  html[data-theme="light"] .chat-item.active { background: #eaf0fb; }
 
   .chat-avatar {
     width: 42px;
@@ -240,7 +317,10 @@
     flex-direction: column;
     min-width: 0;
     background: var(--paper);
+    position: relative;
   }
+
+  html:not([data-theme="light"]) #main { background: transparent; }
 
   #chatHeader {
     padding: 14px 20px;
@@ -251,6 +331,8 @@
     background: var(--card);
     flex-shrink: 0;
   }
+
+  html:not([data-theme="light"]) #chatHeader { background: color-mix(in srgb, var(--card) 82%, transparent); }
 
   #backBtn {
     display: none;
@@ -276,18 +358,21 @@
 
   .msg-row {
     display: flex;
-    max-width: 78%;
+    width: 100%;
     margin-bottom: 4px;
   }
-
-  .msg-row.me { align-self: flex-end; }
-  .msg-row.them { align-self: flex-start; }
 
   .msg-sender {
     font-size: 11.5px;
     color: var(--accent);
     font-weight: 600;
     margin: 6px 4px 3px 4px;
+  }
+
+  .msg-row, .msg-row * {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
   }
 
   .bubble {
@@ -311,6 +396,9 @@
     border: 1px solid var(--line);
     border-bottom-left-radius: 4px;
   }
+
+  html:not([data-theme="light"]) .msg-row.them .bubble { background: color-mix(in srgb, var(--bubble-them) 85%, transparent); }
+  html:not([data-theme="light"]) .msg-row.them .voice-bubble { background: color-mix(in srgb, var(--bubble-them) 85%, transparent); }
 
   .msg-time {
     font-size: 10.5px;
@@ -409,6 +497,10 @@
     display: flex;
     align-items: flex-start;
     gap: 8px;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
   }
 
   .msg-row.me { justify-content: flex-end; }
@@ -416,9 +508,6 @@
 
   .msg-bubble-wrap {
     position: relative;
-    cursor: pointer;
-    user-select: none;
-    -webkit-user-select: none;
   }
 
   /* ===== ВЫДЕЛЕНИЕ НЕСКОЛЬКИХ СООБЩЕНИЙ ===== */
@@ -426,7 +515,7 @@
   .msg-row-inner {
     display: flex;
     flex-direction: column;
-    max-width: 100%;
+    max-width: 78%;
   }
 
   .msg-row.me .msg-row-inner { align-items: flex-end; }
@@ -470,16 +559,24 @@
 
   .selection-mode .msg-bubble-wrap { cursor: pointer; }
 
-  /* Панель множественного выбора в шапке чата */
+  /* Панель множественного выбора — лежит АБСОЛЮТНО поверх обычной шапки
+     чата (в тех же границах), поэтому её появление/исчезновение не двигает
+     и не сжимает список сообщений под ней. */
   #selectionBar {
     display: none;
     align-items: center;
     gap: 12px;
-    padding: 14px 16px;
+    padding: 14px 20px;
     border-bottom: 1px solid var(--line);
     background: var(--card);
-    flex-shrink: 0;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 20;
   }
+
+  html:not([data-theme="light"]) #selectionBar { background: color-mix(in srgb, var(--card) 92%, transparent); }
 
   #selectionBar.show { display: flex; }
 
@@ -649,6 +746,9 @@
     flex-shrink: 0;
   }
 
+  html:not([data-theme="light"]) #composer { background: color-mix(in srgb, var(--card) 82%, transparent); }
+  html:not([data-theme="light"]) #msgInput { background: color-mix(in srgb, var(--card) 70%, transparent); }
+
   .icon-btn {
     width: 40px;
     height: 40px;
@@ -683,7 +783,7 @@
     gap: 10px;
     flex: 1;
     padding: 10px 16px;
-    background: #fbeae8;
+    background: #3a2422;
     border-radius: 20px;
     font-size: 13.5px;
     color: var(--error, #c0392b);
@@ -691,6 +791,7 @@
   }
 
   #recordingBar.show { display: flex; }
+  html[data-theme="light"] #recordingBar { background: #fbeae8; }
   #recordingBar .rec-dot {
     width: 9px; height: 9px; border-radius: 50%;
     background: #c0392b;
@@ -920,12 +1021,12 @@
   .profile-msg.info { color: var(--accent-dark); }
 
   .modal-btn.logout {
-    background: #fbeae8;
+    background: #3a2422;
     color: var(--error, #c0392b);
   }
 
-  html[data-theme="dark"] .modal-btn.logout {
-    background: #3a2422;
+  html[data-theme="light"] .modal-btn.logout {
+    background: #fbeae8;
   }
 
   /* ===== ПЕРЕКЛЮЧАТЕЛЬ ТЕМЫ ===== */
@@ -1010,6 +1111,8 @@
 </style>
 </head>
 <body>
+
+<div class="bg-fire"></div>
 
 <div id="app">
 
@@ -1243,22 +1346,29 @@
   }
 
   // ---------- ТЕМА ----------
+  // Тёмная тема — дефолт (нет атрибута data-theme на <html>).
+  // Светлая включается явно через data-theme="light" и запоминается.
   window.toggleTheme = function() {
-    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-    setTheme(!isDark);
+    const isLight = document.documentElement.getAttribute("data-theme") === "light";
+    setTheme(!isLight ? "light" : "dark");
   }
 
-  function setTheme(dark) {
-    document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
-    localStorage.setItem("theme", dark ? "dark" : "light");
+  function setTheme(mode) {
+    if (mode === "light") {
+      document.documentElement.setAttribute("data-theme", "light");
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+    }
+    localStorage.setItem("theme", mode);
     const btn = document.getElementById("themeToggleBtn");
     const knob = document.getElementById("themeToggleKnob");
-    if (btn) btn.classList.toggle("on", dark);
-    if (knob) knob.textContent = dark ? "🌙" : "☀️";
+    const isDark = mode !== "light";
+    if (btn) btn.classList.toggle("on", isDark);
+    if (knob) knob.textContent = isDark ? "🌙" : "☀️";
   }
 
   function initThemeToggleUI() {
-    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    const isDark = document.documentElement.getAttribute("data-theme") !== "light";
     const btn = document.getElementById("themeToggleBtn");
     const knob = document.getElementById("themeToggleKnob");
     if (btn) btn.classList.toggle("on", isDark);
@@ -1727,7 +1837,7 @@
         ${senderLabelHTML}
         <div class="msg-bubble-wrap">
           ${replyQuoteHTML}
-          <img class="bubble-image" src="${msg.mediaUrl}" onclick="event.stopPropagation(); handleBubbleTap('${msgId}', () => openLightbox('${msg.mediaUrl}'))">
+          <img class="bubble-image" src="${msg.mediaUrl}" draggable="false" onclick="event.stopPropagation(); handleBubbleTap('${msgId}', () => openLightbox('${msg.mediaUrl}'))">
         </div>
         <div class="msg-time">${time}</div>
       `;
@@ -1796,12 +1906,10 @@
 
   const LONG_PRESS_MS = 450;
 
-  // Вешаем обработчики зажатия/тапа на строку сообщения. Работает и для
-  // touch-устройств, и для мыши (десктоп), чтобы поведение было одинаковым.
+  // Вешаем обработчики зажатия/тапа на ВСЮ строку сообщения (row), а не
+  // только на пузырь — так зажатие срабатывает по всей ширине чата, даже
+  // если палец/курсор оказался сбоку от текста, в пустом месте строки.
   function attachRowGestures(row, msgId) {
-    const wrap = row.querySelector(".msg-bubble-wrap");
-    if (!wrap) return;
-
     let moved = false;
 
     const startPress = () => {
@@ -1819,17 +1927,17 @@
       clearTimeout(longPressTimer);
     };
 
-    wrap.addEventListener("touchstart", startPress, { passive: true });
-    wrap.addEventListener("touchmove", () => { moved = true; cancelPress(); }, { passive: true });
-    wrap.addEventListener("touchend", cancelPress);
-    wrap.addEventListener("touchcancel", cancelPress);
+    row.addEventListener("touchstart", startPress, { passive: true });
+    row.addEventListener("touchmove", () => { moved = true; cancelPress(); }, { passive: true });
+    row.addEventListener("touchend", cancelPress);
+    row.addEventListener("touchcancel", cancelPress);
 
-    wrap.addEventListener("mousedown", startPress);
-    wrap.addEventListener("mousemove", () => { moved = true; });
-    wrap.addEventListener("mouseup", cancelPress);
-    wrap.addEventListener("mouseleave", cancelPress);
+    row.addEventListener("mousedown", startPress);
+    row.addEventListener("mousemove", () => { moved = true; });
+    row.addEventListener("mouseup", cancelPress);
+    row.addEventListener("mouseleave", cancelPress);
 
-    wrap.addEventListener("click", () => {
+    row.addEventListener("click", () => {
       // Если клик пришёл сразу после сработавшего long-press на ЭТОМ ЖЕ
       // сообщении — это тот самый press, а не отдельный тап; игнорируем,
       // чтобы не снять только что поставленную отметку.
