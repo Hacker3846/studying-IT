@@ -149,6 +149,15 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    position: relative;
+    gap: 8px;
+  }
+
+  #sidebarHeader .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
   }
 
   .mark {
@@ -259,11 +268,36 @@
     border-radius: 12px;
     cursor: pointer;
     margin-bottom: 2px;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
   }
 
   .chat-item:hover { background: var(--paper); }
   .chat-item.active { background: #1c2540; }
   html[data-theme="light"] .chat-item.active { background: #eaf0fb; }
+
+  /* Чат, заблокированный текущим пользователем (или наоборот — тем, кто
+     заблокировал текущего пользователя, для личных чатов): выглядит
+     приглушённо и всегда сортируется в конец списка, но не скрывается —
+     чтобы его можно было явно разблокировать или удалить. */
+  .chat-item.blocked {
+    opacity: 0.5;
+  }
+
+  .chat-item.blocked .chat-name::after {
+    content: " · заблокирован";
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--muted);
+  }
+
+  .chat-item.selected-for-action {
+    background: #1c2540;
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  html[data-theme="light"] .chat-item.selected-for-action { background: #eaf0fb; }
 
   .chat-avatar {
     width: 42px;
@@ -555,7 +589,12 @@
     border-radius: 16px;
   }
 
-  .selection-mode .msg-row.me { flex-direction: row-reverse; }
+  /* Раньше здесь стоял flex-direction: row-reverse на .msg-row.me — это
+     ломало justify-content: flex-end (row-reverse разворачивает и то, что
+     считается "концом" ряда), из-за чего свои сообщения в режиме выделения
+     уезжали влево, к сообщениям собеседника. Чекбокс слева от своего пузыря
+     теперь достигается через order, без изменения направления ряда. */
+  .selection-mode .msg-row.me .msg-select-check { order: -1; }
 
   .selection-mode .msg-bubble-wrap { cursor: pointer; }
 
@@ -614,6 +653,49 @@
   #selectionBar .sel-action:hover { background: var(--line); }
   #selectionBar .sel-action svg { width: 18px; height: 18px; }
   #selectionBar .sel-action.danger { color: var(--error, #c0392b); }
+
+  /* ===== ПАНЕЛЬ ДЕЙСТВИЙ НАД ЧАТОМ (зажатие строки в списке чатов) =====
+     Визуально и по разметке — та же плашка, что #selectionBar у сообщений,
+     но лежит поверх шапки списка чатов (#sidebarHeader), а не поверх
+     заголовка переписки. Действия: заблокировать / разблокировать /
+     удалить чат. Набор кнопок собирается в JS под конкретный чат. */
+  #chatActionBar {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--line);
+    background: var(--card);
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 20;
+  }
+
+  html:not([data-theme="light"]) #chatActionBar { background: color-mix(in srgb, var(--card) 92%, transparent); }
+
+  #chatActionBar.show { display: flex; }
+
+  #chatActionBar .sel-close {
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 2px 4px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  #chatActionBar .chat-action-name {
+    flex: 1;
+    font-size: 14.5px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
   .msg-action-menu {
     position: absolute;
@@ -900,6 +982,39 @@
 
   .modal-user-name { font-size: 14px; font-weight: 500; }
 
+  /* Строка в списке учащихся / участников группы (не обязательно с чекбоксом) */
+  .plain-user-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 8px;
+    border-radius: 10px;
+  }
+
+  .plain-user-row .modal-user-name { flex: 1; min-width: 0; }
+
+  .role-badge {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    background: #1c2540;
+    padding: 3px 8px;
+    border-radius: 6px;
+    flex-shrink: 0;
+  }
+  html[data-theme="light"] .role-badge { background: #eaf0fb; }
+
+  .row-leave-btn {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--error, #c0392b);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px 8px;
+    flex-shrink: 0;
+  }
+
   .modal-actions {
     display: flex;
     gap: 10px;
@@ -1123,7 +1238,22 @@
         <div class="mark-dot"></div>
         <div class="mark-text">Мессенджер</div>
       </div>
-      <button id="meBtn" title="Мой профиль" onclick="openProfileModal()">·</button>
+      <div class="header-actions">
+        <button class="icon-btn" title="Список учащихся" onclick="openStudentsModal()" style="width:34px;height:34px;">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M17 21V19C17 16.79 15.21 15 13 15H5C2.79 15 1 16.79 1 19V21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9" cy="7" r="4" stroke="currentColor" stroke-width="2"/><path d="M23 21V19C23 17.13 21.73 15.51 20 15.03" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M16 3.13C17.72 3.58 19 5.19 19 7C19 8.81 17.72 10.42 16 10.87" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+        <button id="meBtn" title="Мой профиль" onclick="openProfileModal()">·</button>
+      </div>
+    </div>
+    <div id="chatActionBar">
+      <button class="sel-close" onclick="closeChatActionBar()" title="Отменить">×</button>
+      <div class="chat-action-name" id="chatActionName"></div>
+      <button class="sel-action" id="chatActionBlockBtn" onclick="toggleChatBlockFromBar()" title="Заблокировать">
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M5.5 5.5L18.5 18.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <button class="sel-action danger" onclick="deleteChatFromBar()" title="Удалить чат">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 7H20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 7V4H15V7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 7L7 20H17L18 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
     </div>
     <button id="newChatBtn" onclick="openNewChatModal()">+ Новый чат</button>
     <div class="search-box">
@@ -1141,6 +1271,7 @@
   </div>
 
 </div>
+
 
 <!-- ЛАЙТБОКС ДЛЯ ФОТО -->
 <div id="lightbox" onclick="closeLightbox()">
@@ -1220,6 +1351,48 @@
   </div>
 </div>
 
+<!-- МОДАЛКА: СПИСОК УЧАЩИХСЯ -->
+<div class="modal-overlay" id="studentsModal">
+  <div class="modal">
+    <h3>Учащиеся</h3>
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21L16.65 16.65" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <input type="text" id="studentsSearchInput" placeholder="Поиск по имени или группе…" oninput="handleStudentsSearch(this.value)">
+    </div>
+    <div class="modal-list" id="studentsList"></div>
+    <div class="modal-actions">
+      <button class="modal-btn cancel" onclick="closeStudentsModal()" style="flex:none;padding-left:24px;padding-right:24px;">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<!-- МОДАЛКА: УЧАСТНИКИ ГРУППЫ -->
+<div class="modal-overlay" id="membersModal">
+  <div class="modal">
+    <h3>Участники группы</h3>
+    <div class="modal-list" id="membersList"></div>
+    <div class="modal-actions" id="membersModalActions">
+      <button class="modal-btn cancel" onclick="closeMembersModal()">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<!-- МОДАЛКА: ДОБАВИТЬ УЧАСТНИКОВ В ГРУППУ -->
+<div class="modal-overlay" id="addMembersModal">
+  <div class="modal">
+    <h3>Добавить участников</h3>
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21L16.65 16.65" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <input type="text" id="addMembersSearchInput" placeholder="Поиск по имени, группе или email…" oninput="handleAddMembersSearch(this.value)">
+    </div>
+    <div class="modal-list" id="addMembersList"></div>
+    <div class="modal-actions">
+      <button class="modal-btn cancel" onclick="closeAddMembersModal()">Отмена</button>
+      <button class="modal-btn confirm" id="addMembersConfirmBtn" onclick="confirmAddMembers()" disabled>Добавить</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
   import {
@@ -1280,6 +1453,18 @@
   let selectedMessageIds = new Set(); // id выделенных сообщений
   let longPressTimer = null;
   let longPressTriggeredId = null; // чтобы не открывать обычное меню сразу после долгого нажатия
+
+  // ---------- БЛОКИРОВКА / УДАЛЕНИЕ ЧАТА, УЧАСТНИКИ ГРУППЫ ----------
+  let chatRowLongPressTimer = null;
+  let chatActionChatId = null;   // id чата, для которого сейчас открыта панель действий (зажатие строки)
+  let chatActionMoved = false;
+  let studentsSearchQuery = "";
+  let addMembersSearchQuery = "";
+  let addMembersChatId = null;
+  let selectedNewMemberIds = new Set();
+
+  const CHAT_ROW_LONG_PRESS_MS = 450;
+  const GROUP_MIN_SIZE = 3; // от скольки участников чат считается группой
 
   // ---------- CLOUDINARY (хранение фото и голосовых) ----------
   const CLOUDINARY_CLOUD_NAME = "ctcszg0j";
@@ -1491,6 +1676,62 @@
     return name.trim().split(/\s+/).slice(0,2).map(w => w[0].toUpperCase()).join("");
   }
 
+  // ---------- СПИСОК УЧАЩИХСЯ ----------
+  // Простой просмотр всех зарегистрированных пользователей (имя + группа),
+  // без возможности начать чат прямо отсюда — для этого есть "+ Новый чат".
+  window.openStudentsModal = function() {
+    studentsSearchQuery = "";
+    const searchInput = document.getElementById("studentsSearchInput");
+    if (searchInput) searchInput.value = "";
+    renderStudentsList();
+    document.getElementById("studentsModal")?.classList.add("show");
+  }
+
+  window.closeStudentsModal = function() {
+    document.getElementById("studentsModal")?.classList.remove("show");
+  }
+
+  window.handleStudentsSearch = function(value) {
+    studentsSearchQuery = value;
+    renderStudentsList();
+  }
+
+  function renderStudentsList() {
+    const list = document.getElementById("studentsList");
+    if (!list) return;
+
+    const q = studentsSearchQuery.trim().toLowerCase();
+    let students = Object.entries(allUsers);
+
+    if (q) {
+      students = students.filter(([, data]) => {
+        const haystack = [data.name, data.group].filter(Boolean).join(" ").toLowerCase();
+        return haystack.includes(q);
+      });
+    }
+
+    students.sort((a, b) => (a[1].name || "").localeCompare(b[1].name || ""));
+
+    if (students.length === 0) {
+      list.innerHTML = q
+        ? '<div class="empty-hint">Никого не найдено по запросу «' + escapeHtml(studentsSearchQuery.trim()) + '».</div>'
+        : '<div class="empty-hint">Пока нет зарегистрированных пользователей.</div>';
+      return;
+    }
+
+    list.innerHTML = "";
+    students.forEach(([uid, data]) => {
+      const row = document.createElement("div");
+      row.className = "plain-user-row";
+      const isMe = uid === currentUser.uid;
+      row.innerHTML = `
+        ${data.photoURL ? `<div class="chat-avatar" style="width:34px;height:34px;flex-shrink:0;"><img src="${data.photoURL}"></div>` : `<div class="chat-avatar" style="width:34px;height:34px;flex-shrink:0;font-size:13px;">${initials(data.name)}</div>`}
+        <div class="modal-user-name">${escapeHtml(data.name || "Пользователь")}${isMe ? " (вы)" : ""}${data.group ? ' <span style="color:var(--muted);font-weight:400;">· ' + escapeHtml(data.group) + '</span>' : ''}</div>
+      `;
+      list.appendChild(row);
+    });
+  }
+
   // Раньше это был одноразовый getDocs — из-за этого новые пользователи
   // (например, второй зарегистрированный аккаунт) не появлялись в списке
   // "Новый чат" и в поиске без перезагрузки страницы. Теперь это живая подписка.
@@ -1518,21 +1759,32 @@
     if (chatListUnsub) chatListUnsub();
     chatListUnsub = onSnapshot(q, (snap) => {
       const chats = [];
-      snap.forEach(d => chats.push({ id: d.id, ...d.data() }));
-
-      // Глобальный чат всегда сверху, дальше по алфавиту/типу
-      chats.sort((a, b) => {
-        if (a.type === "global") return -1;
-        if (b.type === "global") return 1;
-        return (a.name || "").localeCompare(b.name || "");
+      snap.forEach(d => {
+        const data = d.data();
+        if ((data.deletedFor || []).includes(currentUser.uid)) return;
+        chats.push({ id: d.id, ...data });
       });
 
-      lastChats = chats;
-      renderChatList(filterChats(chats));
+      lastChats = sortChats(chats);
+      renderChatList(filterChats(lastChats));
     }, (err) => {
       console.error(err);
       document.getElementById("chatList").innerHTML =
         '<div class="empty-hint">Не получилось загрузить чаты. Проверь подключение.</div>';
+    });
+  }
+
+  // Глобальный чат всегда сверху; заблокированные (кем бы то ни было —
+  // мной или, для личных чатов, собеседником) — всегда внизу списка,
+  // но не скрываются, чтобы их можно было явно разблокировать/удалить.
+  function sortChats(chats) {
+    return [...chats].sort((a, b) => {
+      if (a.type === "global") return -1;
+      if (b.type === "global") return 1;
+      const aBlocked = isChatBlockedForMe(a) ? 1 : 0;
+      const bBlocked = isChatBlockedForMe(b) ? 1 : 0;
+      if (aBlocked !== bBlocked) return aBlocked - bBlocked;
+      return (a.name || "").localeCompare(b.name || "");
     });
   }
 
@@ -1580,6 +1832,32 @@
     return `<div class="chat-avatar">${initials(name)}</div>`;
   }
 
+  // ---------- БЛОКИРОВКА ЧАТОВ ----------
+  // Структура на документе чата:
+  //   blockedBy: uid | null — кто заблокировал личный чат (может быть
+  //     любая из сторон: инициатор блокировки перестаёт видеть чат как
+  //     активный и не может писать; тот, кого заблокировали, тоже не
+  //     может писать туда, пока инициатор не разблокирует).
+  //   blockedByGroup: [uid, ...] — участники, которые для СЕБЯ заблокировали
+  //     групповой чат (уходит вниз списка и сереет только у них лично;
+  //     писать в группу такой участник тоже не может, пока не разблокирует).
+  //   blockedUsers: [uid, ...] — на групповом чате: пользователи, которых
+  //     нельзя добавить в группу заново (устанавливается при блокировке
+  //     группы и/или при выходе — см. заметку у leaveGroup).
+  function isChatBlockedForMe(chat) {
+    if (chat.type === "personal") return !!chat.blockedBy;
+    if (chat.type === "group") return (chat.blockedByGroup || []).includes(currentUser.uid);
+    return false;
+  }
+
+  // Могу ли я сейчас писать в этот чат.
+  function canSendToChat(chat) {
+    if (!chat) return false;
+    if (chat.type === "personal") return !chat.blockedBy;
+    if (chat.type === "group") return !(chat.blockedByGroup || []).includes(currentUser.uid);
+    return true;
+  }
+
   function renderChatList(chats) {
     const list = document.getElementById("chatList");
     if (chats.length === 0) {
@@ -1590,9 +1868,12 @@
     }
     list.innerHTML = "";
     chats.forEach(chat => {
+      const blocked = isChatBlockedForMe(chat);
       const item = document.createElement("div");
-      item.className = "chat-item" + (chat.id === currentChatId ? " active" : "");
-      item.onclick = () => openChat(chat.id, chat);
+      item.className = "chat-item"
+        + (chat.id === currentChatId ? " active" : "")
+        + (blocked ? " blocked" : "");
+      item.dataset.chatId = chat.id;
       item.innerHTML = `
         ${chatAvatarHTML(chat)}
         <div class="chat-info">
@@ -1600,6 +1881,7 @@
           <div class="chat-preview">${escapeHtml(chat.lastMessage || "Нет сообщений")}</div>
         </div>
       `;
+      attachChatRowGestures(item, chat);
       list.appendChild(item);
     });
   }
@@ -1608,6 +1890,457 @@
     const d = document.createElement("div");
     d.textContent = str || "";
     return d.innerHTML;
+  }
+
+  // ---------- ЖЕСТЫ НАД СТРОКОЙ ЧАТА (зажатие → панель действий) ----------
+  // По короткому тапу — обычное открытие чата. По зажатию — открывается
+  // панель "Заблокировать/Разблокировать/Удалить" поверх шапки списка,
+  // без перехода в переписку (как и с сообщениями, чтобы не читать чужое
+  // сообщение случайно, здесь — чтобы не открыть чат, который хотим просто
+  // заблокировать).
+  function attachChatRowGestures(row, chat) {
+    let moved = false;
+    let longPressFired = false;
+
+    const startPress = () => {
+      moved = false;
+      longPressFired = false;
+      clearTimeout(chatRowLongPressTimer);
+      chatRowLongPressTimer = setTimeout(() => {
+        if (moved) return;
+        longPressFired = true;
+        openChatActionBar(chat);
+        if (navigator.vibrate) navigator.vibrate(15);
+      }, CHAT_ROW_LONG_PRESS_MS);
+    };
+
+    const cancelPress = () => clearTimeout(chatRowLongPressTimer);
+
+    row.addEventListener("touchstart", startPress, { passive: true });
+    row.addEventListener("touchmove", () => { moved = true; cancelPress(); }, { passive: true });
+    row.addEventListener("touchend", cancelPress);
+    row.addEventListener("touchcancel", cancelPress);
+
+    row.addEventListener("mousedown", startPress);
+    row.addEventListener("mousemove", () => { moved = true; });
+    row.addEventListener("mouseup", cancelPress);
+    row.addEventListener("mouseleave", cancelPress);
+
+    row.addEventListener("click", () => {
+      if (longPressFired) { longPressFired = false; return; }
+      openChat(chat.id, chat);
+    });
+  }
+
+  window.openChatActionBar = function(chat) {
+    chatActionChatId = chat.id;
+    const bar = document.getElementById("chatActionBar");
+    const nameEl = document.getElementById("chatActionName");
+    const blockBtn = document.getElementById("chatActionBlockBtn");
+    if (!bar || !nameEl || !blockBtn) return;
+
+    nameEl.textContent = chatDisplayName(chat);
+
+    const blocked = isChatBlockedForMe(chat);
+    blockBtn.title = blocked ? "Разблокировать" : "Заблокировать";
+    blockBtn.innerHTML = blocked
+      ? '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M8.5 12L11 14.5L15.5 9.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+      : '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M5.5 5.5L18.5 18.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+
+    document.querySelectorAll(".chat-item").forEach(el => {
+      el.classList.toggle("selected-for-action", el.dataset.chatId === chat.id);
+    });
+
+    bar.classList.add("show");
+  }
+
+  window.closeChatActionBar = function() {
+    chatActionChatId = null;
+    document.getElementById("chatActionBar")?.classList.remove("show");
+    document.querySelectorAll(".chat-item").forEach(el => el.classList.remove("selected-for-action"));
+  }
+
+  function findChatById(chatId) {
+    return lastChats.find(c => c.id === chatId) || null;
+  }
+
+  // ЗАДЕЛКА ДЫРЫ: раньше "удалить чат у себя" (deletedFor) было
+  // необратимо молчаливым — если собеседник (или кто-то из группы) потом
+  // писал в этот чат, у удалившего он не появлялся обратно, хотя переписка
+  // объективно продолжалась. Теперь при любой новой активности в чате
+  // (текст, фото, голосовое) снимаем deletedFor со ВСЕХ участников, кроме
+  // отправителя, чтобы чат снова стал видимым как только в нём что-то
+  // происходит. Отправитель тоже возвращает себе чат в список неявно —
+  // если он писал, значит у него чат явно открыт и не в deletedFor.
+  async function reviveChatForOtherMembers(chatId, chatMembers) {
+    const others = (chatMembers || []).filter(uid => uid !== currentUser.uid);
+    if (others.length === 0) return;
+    try {
+      await updateDoc(doc(db, "chats", chatId), {
+        deletedFor: arrayRemove(...others)
+      });
+    } catch (err) {
+      // Не критично для отправки самого сообщения — просто логируем.
+      console.error("Не удалось вернуть чат из удалённых:", err);
+    }
+  }
+
+  // Личный чат: инициатор блокировки записывается в blockedBy — блокировка
+  // держится, пока именно ОН её не снимет (собеседник не может разблокировать
+  // чат за него — иначе блокировка была бы бессмысленной).
+  // Групповой чат: blockedByGroup — персональный список "заблокировал у себя",
+  // каждый управляет только своей записью там.
+  // ЗАДЕЛКА ДЫРЫ: раньше blockedByGroup (серый чат/запрет писать у себя) и
+  // blockedUsers (запрет админу добавить обратно) были двумя независимыми
+  // полями, которые нигде явно не связывались в UI — заблокировав группу
+  // тут, человек не защищал себя от повторного добавления, и наоборот.
+  // Теперь блокировка группы из этой панели ставит ОБА поля разом, а
+  // разблокировка снимает оба — это единое действие с понятным смыслом:
+  // "я не хочу быть в этой группе и не хочу, чтобы меня вернули туда
+  // без моего ведома". Явно вернуться можно только через разблокировку
+  // здесь же, или через отдельный контрол в модалке участников (для
+  // случая, когда человек уже вышел, а не просто заблокировал).
+  window.toggleChatBlockFromBar = async function() {
+    const chat = findChatById(chatActionChatId);
+    if (!chat) { closeChatActionBar(); return; }
+
+    try {
+      if (chat.type === "personal") {
+        if (chat.blockedBy && chat.blockedBy !== currentUser.uid) {
+          alert("Этот чат заблокировал собеседник — снять блокировку можете только он.");
+          closeChatActionBar();
+          return;
+        }
+        await updateDoc(doc(db, "chats", chat.id), {
+          blockedBy: chat.blockedBy ? null : currentUser.uid
+        });
+      } else if (chat.type === "group") {
+        if (isChatBlockedForMe(chat)) {
+          await updateDoc(doc(db, "chats", chat.id), {
+            blockedByGroup: arrayRemove(currentUser.uid),
+            blockedUsers: arrayRemove(currentUser.uid)
+          });
+        } else {
+          await updateDoc(doc(db, "chats", chat.id), {
+            blockedByGroup: arrayUnion(currentUser.uid),
+            blockedUsers: arrayUnion(currentUser.uid)
+          });
+        }
+      } else {
+        alert("Общий чат нельзя заблокировать.");
+      }
+    } catch (err) {
+      alert("Не удалось изменить блокировку: " + err.message);
+    }
+    closeChatActionBar();
+  }
+
+  // Удаление чата у себя: чат перестаёт быть виден в МОЁМ списке (через
+  // deletedFor), сами сообщения и чат для остальных участников не
+  // затрагиваются. Для группы это равносильно "скрыть у себя" (выйти из
+  // группы — отдельное действие в модалке участников, оно ещё и убирает
+  // из members, а не только скрывает).
+  window.deleteChatFromBar = async function() {
+    const chat = findChatById(chatActionChatId);
+    if (!chat) { closeChatActionBar(); return; }
+
+    if (chat.type === "global") {
+      alert("Общий чат нельзя удалить.");
+      closeChatActionBar();
+      return;
+    }
+
+    const ok = confirm(chat.type === "group"
+      ? "Удалить эту группу у себя? Остальные участники продолжат видеть её как обычно."
+      : "Удалить этот чат у себя? У собеседника переписка останется.");
+    if (!ok) { closeChatActionBar(); return; }
+
+    try {
+      await updateDoc(doc(db, "chats", chat.id), {
+        deletedFor: arrayUnion(currentUser.uid)
+      });
+      if (currentChatId === chat.id) closeChat();
+    } catch (err) {
+      alert("Не удалось удалить чат: " + err.message);
+    }
+    closeChatActionBar();
+  }
+
+  // ---------- УЧАСТНИКИ ГРУППЫ ----------
+  // Правила:
+  //  - Группой считается чат type === "group" с 3+ участниками
+  //    (GROUP_MIN_SIZE) — это же условие, при котором доступна блокировка
+  //    "на уровне группы" в смысле задачи (см. leaveGroup ниже).
+  //  - Создатель (chat.createdBy) — единственный, кто может ДОБАВЛЯТЬ
+  //    участников. Он не может никого исключить.
+  //  - Любой участник может сам выйти из группы в любой момент.
+  //  - Если участника заблокировали от повторного добавления (см. ниже),
+  //    он попадает в chat.blockedUsers и пропадает из списка кандидатов
+  //    в модалке "Добавить участников", пока запись явно не снимут.
+  //
+  // Блокировка группы (chatActionBar → blockedByGroup) и запрет повторного
+  // добавления (blockedUsers) теперь ставятся и снимаются вместе одним
+  // действием — см. toggleChatBlockFromBar и unblockGroupMember.
+  window.openMembersModal = async function(chatId) {
+    const chat = findChatById(chatId) || (await getChatDoc(chatId));
+    if (!chat || chat.type !== "group") return;
+
+    const modal = document.getElementById("membersModal");
+    const list = document.getElementById("membersList");
+    const actions = document.getElementById("membersModalActions");
+    if (!modal || !list || !actions) return;
+
+    modal.dataset.chatId = chatId;
+
+    renderMembersList(chat);
+
+    actions.innerHTML = "";
+    if (chat.createdBy === currentUser.uid) {
+      const addBtn = document.createElement("button");
+      addBtn.className = "modal-btn confirm";
+      addBtn.textContent = "+ Добавить участников";
+      addBtn.onclick = () => openAddMembersModal(chatId);
+      actions.appendChild(addBtn);
+    }
+    const leaveBtn = document.createElement("button");
+    leaveBtn.className = "modal-btn logout";
+    leaveBtn.textContent = "Выйти из группы";
+    leaveBtn.onclick = () => leaveGroup(chatId);
+    actions.appendChild(leaveBtn);
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "modal-btn cancel";
+    closeBtn.textContent = "Закрыть";
+    closeBtn.onclick = closeMembersModal;
+    actions.appendChild(closeBtn);
+
+    modal.classList.add("show");
+  }
+
+  async function getChatDoc(chatId) {
+    const snap = await getDoc(doc(db, "chats", chatId));
+    return snap.exists() ? { id: chatId, ...snap.data() } : null;
+  }
+
+  function renderMembersList(chat) {
+    const list = document.getElementById("membersList");
+    if (!list) return;
+    const members = chat.members || [];
+    const blockedUsers = chat.blockedUsers || [];
+    const isAdmin = chat.createdBy === currentUser.uid;
+
+    list.innerHTML = "";
+    members.forEach(uid => {
+      const u = allUsers[uid] || {};
+      const row = document.createElement("div");
+      row.className = "plain-user-row";
+      const isCreator = uid === chat.createdBy;
+      const isMe = uid === currentUser.uid;
+      row.innerHTML = `
+        <div class="modal-user-name">${escapeHtml(u.name || u.email || "Пользователь")}${isMe ? " (вы)" : ""}${u.group ? ' <span style="color:var(--muted);font-weight:400;">· ' + escapeHtml(u.group) + '</span>' : ''}</div>
+        ${isCreator ? '<span class="role-badge">Админ</span>' : ''}
+      `;
+      list.appendChild(row);
+    });
+
+    // ЗАДЕЛКА ДЫРЫ: раньше снять запись из blockedUsers (заблокировал себя
+    // сам / вышел из группы) можно было только вручную в базе — здесь
+    // единственный человек, кто в принципе может это увидеть (админ,
+    // потому что у самого заблокированного/вышедшего участника чат уже не
+    // отображается в его списке — он не в members), получает контрол,
+    // чтобы явно вернуть человеку возможность быть добавленным снова.
+    if (isAdmin && blockedUsers.length > 0) {
+      const header = document.createElement("div");
+      header.className = "empty-hint";
+      header.style.textAlign = "left";
+      header.style.padding = "14px 8px 4px 8px";
+      header.textContent = "Заблокированы (нельзя добавить, пока не снимете блокировку):";
+      list.appendChild(header);
+
+      blockedUsers.forEach(uid => {
+        const u = allUsers[uid] || {};
+        const row = document.createElement("div");
+        row.className = "plain-user-row";
+        row.style.opacity = "0.7";
+        row.innerHTML = `
+          <div class="modal-user-name">${escapeHtml(u.name || u.email || "Пользователь")}${u.group ? ' <span style="color:var(--muted);font-weight:400;">· ' + escapeHtml(u.group) + '</span>' : ''}</div>
+        `;
+        const unblockBtn = document.createElement("button");
+        unblockBtn.className = "row-leave-btn";
+        unblockBtn.textContent = "Разблокировать";
+        unblockBtn.onclick = () => unblockGroupMember(chat.id, uid);
+        row.appendChild(unblockBtn);
+        list.appendChild(row);
+      });
+    }
+  }
+
+  // Снимает запись из blockedUsers (и, если она там ещё осталась, из
+  // blockedByGroup — на случай если человек когда-то заблокировал группу
+  // для себя, но потом чат под него подчистили другим путём). Доступно
+  // только через модалку участников, которую видит админ.
+  window.unblockGroupMember = async function(chatId, uid) {
+    try {
+      await updateDoc(doc(db, "chats", chatId), {
+        blockedUsers: arrayRemove(uid),
+        blockedByGroup: arrayRemove(uid)
+      });
+      const chat = await getChatDoc(chatId);
+      if (chat) renderMembersList(chat);
+    } catch (err) {
+      alert("Не удалось снять блокировку: " + err.message);
+    }
+  }
+
+  window.closeMembersModal = function() {
+    document.getElementById("membersModal")?.classList.remove("show");
+  }
+
+  // Выход из группы: убираю себя из members. Заодно фиксирую себя в
+  // blockedUsers — по условию задачи, если группу заблокировали (в данном
+  // случае трактуем "вышел из группы" как то же самое, что "заблокировал
+  // для себя навсегда"), админ не должен иметь возможность добавить этого
+  // человека обратно без явного снятия блокировки.
+  window.leaveGroup = async function(chatId) {
+    const chat = findChatById(chatId) || (await getChatDoc(chatId));
+    if (!chat) return;
+
+    const ok = confirm("Выйти из группы «" + (chat.name || "Группа") + "»? Обратно тебя сможет добавить только админ группы, и только после того, как явно снимет блокировку в списке участников.");
+    if (!ok) return;
+
+    try {
+      await updateDoc(doc(db, "chats", chatId), {
+        members: arrayRemove(currentUser.uid),
+        blockedUsers: arrayUnion(currentUser.uid)
+      });
+      closeMembersModal();
+      if (currentChatId === chatId) closeChat();
+    } catch (err) {
+      alert("Не удалось выйти из группы: " + err.message);
+    }
+  }
+
+  // ---------- ДОБАВЛЕНИЕ УЧАСТНИКОВ В ГРУППУ (только админ) ----------
+  window.openAddMembersModal = async function(chatId) {
+    const chat = findChatById(chatId) || (await getChatDoc(chatId));
+    if (!chat) return;
+    if (chat.createdBy !== currentUser.uid) {
+      alert("Добавлять участников может только создатель группы.");
+      return;
+    }
+
+    addMembersChatId = chatId;
+    selectedNewMemberIds = new Set();
+    addMembersSearchQuery = "";
+    const searchInput = document.getElementById("addMembersSearchInput");
+    if (searchInput) searchInput.value = "";
+    document.getElementById("addMembersConfirmBtn").disabled = true;
+
+    renderAddMembersList(chat);
+    document.getElementById("addMembersModal").classList.add("show");
+  }
+
+  window.handleAddMembersSearch = function(value) {
+    addMembersSearchQuery = value;
+    const chat = findChatById(addMembersChatId);
+    if (chat) renderAddMembersList(chat);
+  }
+
+  function renderAddMembersList(chat) {
+    const list = document.getElementById("addMembersList");
+    if (!list) return;
+
+    const members = new Set(chat.members || []);
+    const blockedUsers = new Set(chat.blockedUsers || []);
+    const q = addMembersSearchQuery.trim().toLowerCase();
+
+    let candidates = Object.entries(allUsers).filter(([uid]) => !members.has(uid));
+
+    // Заблокированных (в т.ч. тех, кто ранее сам вышел из группы) —
+    // исключаем из списка кандидатов: их нельзя добавить обратно, пока
+    // блокировка явно не снята.
+    const blockedCandidates = candidates.filter(([uid]) => blockedUsers.has(uid));
+    candidates = candidates.filter(([uid]) => !blockedUsers.has(uid));
+
+    if (q) {
+      candidates = candidates.filter(([, data]) => {
+        const haystack = [data.name, data.group, data.email].filter(Boolean).join(" ").toLowerCase();
+        return haystack.includes(q);
+      });
+    }
+
+    list.innerHTML = "";
+
+    if (candidates.length === 0 && blockedCandidates.length === 0) {
+      list.innerHTML = '<div class="empty-hint">Добавлять больше некого.</div>';
+      return;
+    }
+
+    candidates.forEach(([uid, data]) => {
+      const row = document.createElement("label");
+      row.className = "modal-user";
+      row.innerHTML = `
+        <input type="checkbox" data-uid="${uid}">
+        <div class="modal-user-name">${escapeHtml(data.name || data.email)}${data.group ? ' <span style="color:var(--muted);font-weight:400;">· ' + escapeHtml(data.group) + '</span>' : ''}</div>
+      `;
+      const checkbox = row.querySelector("input");
+      checkbox.checked = selectedNewMemberIds.has(uid);
+      checkbox.addEventListener("change", () => {
+        if (checkbox.checked) selectedNewMemberIds.add(uid);
+        else selectedNewMemberIds.delete(uid);
+        document.getElementById("addMembersConfirmBtn").disabled = selectedNewMemberIds.size === 0;
+      });
+      list.appendChild(row);
+    });
+
+    // ЗАДЕЛКА ДЫРЫ: раньше заблокированные просто показывались серым без
+    // возможности что-либо с этим сделать здесь же — админу приходилось
+    // закрывать эту модалку, открывать модалку участников, искать там
+    // того же человека и только потом возвращаться сюда. Кнопка ниже
+    // снимает блокировку сразу на месте и перерисовывает список, так что
+    // человек тут же попадает в обычные кандидаты с чекбоксом.
+    if (blockedCandidates.length > 0 && !q) {
+      const hint = document.createElement("div");
+      hint.className = "empty-hint";
+      hint.style.textAlign = "left";
+      hint.style.padding = "10px 8px 4px 8px";
+      hint.textContent = "Нельзя добавить (покинули группу или заблокированы):";
+      list.appendChild(hint);
+      blockedCandidates.forEach(([uid, data]) => {
+        const row = document.createElement("div");
+        row.className = "plain-user-row";
+        row.style.opacity = "0.7";
+        row.innerHTML = `<div class="modal-user-name">${escapeHtml(data.name || data.email)}</div>`;
+        const unblockBtn = document.createElement("button");
+        unblockBtn.className = "row-leave-btn";
+        unblockBtn.textContent = "Разблокировать";
+        unblockBtn.onclick = async () => {
+          await unblockGroupMember(chat.id, uid);
+          const freshChat = await getChatDoc(chat.id);
+          if (freshChat) renderAddMembersList(freshChat);
+        };
+        row.appendChild(unblockBtn);
+        list.appendChild(row);
+      });
+    }
+  }
+
+  window.closeAddMembersModal = function() {
+    document.getElementById("addMembersModal")?.classList.remove("show");
+  }
+
+  window.confirmAddMembers = async function() {
+    if (selectedNewMemberIds.size === 0 || !addMembersChatId) return;
+    try {
+      await updateDoc(doc(db, "chats", addMembersChatId), {
+        members: arrayUnion(...Array.from(selectedNewMemberIds))
+      });
+      closeAddMembersModal();
+      const chat = await getChatDoc(addMembersChatId);
+      if (chat) renderMembersList(chat);
+    } catch (err) {
+      alert("Не удалось добавить участников: " + err.message);
+    }
   }
 
   // ---------- ОТКРЫТИЕ ЧАТА ----------
@@ -1621,14 +2354,21 @@
 
     document.querySelectorAll(".chat-item").forEach(el => el.classList.remove("active"));
 
+    const isGroup = chatData.type === "group";
+    const blocked = !canSendToChat(chatData);
+
     const main = document.getElementById("main");
     main.innerHTML = `
       <div id="chatHeader">
         <button id="backBtn" onclick="closeChat()">‹</button>
-        <div>
+        <div style="flex:1;min-width:0;">
           <div id="chatHeaderName">${escapeHtml(chatDisplayName(chatData))}</div>
           <div id="chatHeaderSub">${chatHeaderSubText(chatData)}</div>
         </div>
+        ${isGroup ? `
+        <button class="icon-btn" title="Участники группы" onclick="openMembersModal('${chatId}')" style="width:36px;height:36px;">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M17 21V19C17 16.79 15.21 15 13 15H5C2.79 15 1 16.79 1 19V21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9" cy="7" r="4" stroke="currentColor" stroke-width="2"/><path d="M23 21V19C23 17.13 21.73 15.51 20 15.03" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M16 3.13C17.72 3.58 19 5.19 19 7C19 8.81 17.72 10.42 16 10.87" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>` : ``}
       </div>
       <div id="selectionBar">
         <button class="sel-close" onclick="exitSelectionMode()" title="Отменить">×</button>
@@ -1649,6 +2389,13 @@
         </div>
         <button class="reply-cancel" onclick="cancelReply()" title="Отменить ответ">×</button>
       </div>
+      ${blocked ? `
+      <div id="composer" style="justify-content:center;">
+        <div style="color:var(--muted);font-size:13.5px;text-align:center;padding:6px 0;">
+          🔒 Чат заблокирован — отправка сообщений недоступна
+        </div>
+      </div>
+      ` : `
       <div id="composer">
         <button class="icon-btn" onclick="document.getElementById('fileInput').click()" title="Прикрепить фото">
           <svg viewBox="0 0 24 24" fill="none"><path d="M21 15V19C21 20.1 20.1 21 19 21H5C3.9 21 3 20.1 3 19V5C3 3.9 3.9 3 5 3H12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9" cy="9" r="2" stroke="currentColor" stroke-width="2"/><path d="M3 17L8 12L11 15L16 10L21 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 3V9M15 6H21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -1670,23 +2417,26 @@
           <svg viewBox="0 0 24 24" fill="none"><path d="M3 11L21 3L14 21L11 13L3 11Z" stroke="white" stroke-width="2" stroke-linejoin="round"/></svg>
         </button>
       </div>
+      `}
     `;
 
     document.getElementById("fileInput").onchange = handleFileSelected;
 
     const input = document.getElementById("msgInput");
-    input.addEventListener("input", () => {
-      input.style.height = "auto";
-      input.style.height = Math.min(input.scrollHeight, 120) + "px";
+    if (input) {
+      input.addEventListener("input", () => {
+        input.style.height = "auto";
+        input.style.height = Math.min(input.scrollHeight, 120) + "px";
+        updateComposerButtons();
+      });
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
       updateComposerButtons();
-    });
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-      }
-    });
-    updateComposerButtons();
+    }
 
     listenToMessages(chatId);
     lastChats = await currentChatsSnapshotFallback();
@@ -1699,13 +2449,12 @@
     const q = query(collection(db, "chats"), where("members", "array-contains", currentUser.uid));
     const snap = await getDocs(q);
     const chats = [];
-    snap.forEach(d => chats.push({ id: d.id, ...d.data() }));
-    chats.sort((a, b) => {
-      if (a.type === "global") return -1;
-      if (b.type === "global") return 1;
-      return (a.name || "").localeCompare(b.name || "");
+    snap.forEach(d => {
+      const data = d.data();
+      if ((data.deletedFor || []).includes(currentUser.uid)) return;
+      chats.push({ id: d.id, ...data });
     });
-    return chats;
+    return sortChats(chats);
   }
 
   window.closeChat = function() {
@@ -2267,6 +3016,12 @@
     const text = input.value.trim();
     if (!text || !currentChatId) return;
 
+    const chat = findChatById(currentChatId);
+    if (chat && !canSendToChat(chat)) {
+      alert("Нельзя отправить сообщение — чат заблокирован.");
+      return;
+    }
+
     // Если сейчас отвечаем на сообщение — прикладываем компактную ссылку
     // на него (id + имя автора + короткий превью текста). Полный документ
     // оригинала не дублируем, чтобы не раздувать сообщение.
@@ -2292,6 +3047,7 @@
         lastMessage: text,
         lastMessageAt: serverTimestamp()
       }, { merge: true });
+      await reviveChatForOtherMembers(currentChatId, chat?.members);
     } catch (err) {
       alert("Не удалось отправить сообщение: " + err.message);
     }
@@ -2428,6 +3184,12 @@
     e.target.value = ""; // сброс, чтобы можно было выбрать тот же файл повторно
     if (!file || !currentChatId) return;
 
+    const chatForFile = findChatById(currentChatId);
+    if (chatForFile && !canSendToChat(chatForFile)) {
+      alert("Нельзя отправить фото — чат заблокирован.");
+      return;
+    }
+
     if (!file.type.startsWith("image/")) {
       alert("Пока можно отправлять только изображения.");
       return;
@@ -2455,6 +3217,7 @@
         lastMessage: "📷 Фото",
         lastMessageAt: serverTimestamp()
       }, { merge: true });
+      await reviveChatForOtherMembers(currentChatId, chatForFile?.members);
     } catch (err) {
       alert("Не удалось загрузить фото: " + err.message);
     } finally {
@@ -2487,6 +3250,12 @@
 
   async function startRecording() {
     if (!currentChatId) return;
+
+    const chatForVoice = findChatById(currentChatId);
+    if (chatForVoice && !canSendToChat(chatForVoice)) {
+      alert("Нельзя отправить голосовое — чат заблокирован.");
+      return;
+    }
 
     let stream;
     try {
@@ -2556,6 +3325,7 @@
     if (!mediaRecorder || mediaRecorder.state === "inactive") return;
 
     const durationSecs = (Date.now() - recordingStartTime) / 1000;
+    const chatForVoiceSend = findChatById(currentChatId);
 
     mediaRecorder.onstop = async () => {
       mediaRecorder.stream?.getTracks?.().forEach(t => t.stop());
@@ -2594,6 +3364,7 @@
           lastMessage: "🎤 Голосовое сообщение",
           lastMessageAt: serverTimestamp()
         }, { merge: true });
+        await reviveChatForOtherMembers(currentChatId, chatForVoiceSend?.members);
       } catch (err) {
         alert("Не удалось отправить голосовое: " + err.message);
       } finally {
