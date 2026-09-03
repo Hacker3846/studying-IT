@@ -477,6 +477,36 @@
   .msg-row.me .bubble-image { border-bottom-right-radius: 4px; }
   .msg-row.them .bubble-image { border-bottom-left-radius: 4px; border: 1px solid var(--line); }
 
+  .bubble-video-wrap {
+    position: relative;
+    max-width: 260px;
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .bubble-video {
+    display: block;
+    width: 100%;
+    max-width: 260px;
+    max-height: 320px;
+    border-radius: 16px;
+    background: #000;
+  }
+
+  .msg-row.me .bubble-video-wrap { border-bottom-right-radius: 4px; }
+  .msg-row.them .bubble-video-wrap { border-bottom-left-radius: 4px; border: 1px solid var(--line); }
+
+  /* Прозрачный слой поверх видео, который активируется ТОЛЬКО в режиме
+     множественного выделения — перехватывает тап на выделение сообщения
+     вместо того, чтобы отдавать его нативным controls плеера. Вне режима
+     выделения он не должен мешать воспроизведению/перемотке. */
+  .bubble-video-guard {
+    position: absolute;
+    inset: 0;
+    display: none;
+  }
+  .selection-mode .bubble-video-guard { display: block; }
+
   .voice-bubble {
     display: flex;
     align-items: center;
@@ -1305,7 +1335,7 @@
   <img id="lightboxImg" src="" alt="">
 </div>
 
-<input type="file" id="fileInput" accept="image/*" style="display:none;">
+<input type="file" id="fileInput" accept="image/*,video/*" style="display:none;">
 <input type="file" id="avatarFileInput" accept="image/*" style="display:none;">
 
 <!-- МОДАЛКА: МОЙ ПРОФИЛЬ -->
@@ -2488,7 +2518,7 @@
       </div>
       ` : `
       <div id="composer">
-        <button class="icon-btn" onclick="document.getElementById('fileInput').click()" title="Прикрепить фото">
+        <button class="icon-btn" onclick="document.getElementById('fileInput').click()" title="Прикрепить фото или видео">
           <svg viewBox="0 0 24 24" fill="none"><path d="M21 15V19C21 20.1 20.1 21 19 21H5C3.9 21 3 20.1 3 19V5C3 3.9 3.9 3 5 3H12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9" cy="9" r="2" stroke="currentColor" stroke-width="2"/><path d="M3 17L8 12L11 15L16 10L21 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 3V9M15 6H21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         </button>
 
@@ -2649,6 +2679,7 @@
   // ответа внутри пузыря, и в плашке "отвечаю на..." над полем ввода.
   function messagePreviewText(msg) {
     if (msg.type === "image") return "📷 Фото";
+    if (msg.type === "video") return "🎥 Видео";
     if (msg.type === "voice") return "🎤 Голосовое сообщение";
     return msg.text || "";
   }
@@ -2679,6 +2710,25 @@
         <div class="msg-bubble-wrap">
           ${replyQuoteHTML}
           <img class="bubble-image" src="${msg.mediaUrl}" draggable="false" onclick="event.stopPropagation(); handleBubbleTap('${msgId}', () => openLightbox('${msg.mediaUrl}'))">
+        </div>
+        <div class="msg-time">${time}</div>
+      `;
+    } else if (msg.type === "video") {
+      // Внутри режима выделения обычный тап по видео должен выделять
+      // сообщение, а не запускать проигрывание — тот же паттерн, что и у
+      // фото/голосовых (handleBubbleTap сам решает, что делать, в
+      // зависимости от selectionMode). Клик по самому <video> (в т.ч. по
+      // нативным controls) в режиме выделения глушится через overlay —
+      // иначе клик по контролам проигрывателя проваливался бы в плеер
+      // мимо выделения.
+      innerHTML = `
+        ${senderLabelHTML}
+        <div class="msg-bubble-wrap">
+          ${replyQuoteHTML}
+          <div class="bubble-video-wrap">
+            <video class="bubble-video" src="${msg.mediaUrl}" controls playsinline preload="metadata"></video>
+            <div class="bubble-video-guard" onclick="event.stopPropagation(); handleBubbleTap('${msgId}', null)"></div>
+          </div>
         </div>
         <div class="msg-time">${time}</div>
       `;
@@ -3304,42 +3354,52 @@
 
     const chatForFile = findChatById(currentChatId);
     if (chatForFile && !canSendToChat(chatForFile)) {
-      alert("Нельзя отправить фото — чат заблокирован.");
+      alert("Нельзя отправить файл — чат заблокирован.");
       return;
     }
 
-    if (!file.type.startsWith("image/")) {
-      alert("Пока можно отправлять только изображения.");
+    const isImage = file.type.startsWith("image/");
+    const isVideo = file.type.startsWith("video/");
+    if (!isImage && !isVideo) {
+      alert("Пока можно отправлять только изображения и видео.");
       return;
     }
-    if (file.size > 15 * 1024 * 1024) {
-      alert("Файл слишком большой (максимум 15 МБ).");
+
+    // Видео обычно весит намного больше фото — даём ему свой, более
+    // щедрый лимит, вместо того чтобы резать под потолок фотографий.
+    const maxBytes = isVideo ? 100 * 1024 * 1024 : 15 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      alert("Файл слишком большой (максимум " + (isVideo ? "100 МБ" : "15 МБ") + ").");
       return;
     }
 
     const box = document.getElementById("messages");
     const placeholder = document.createElement("div");
     placeholder.className = "msg-row me";
-    placeholder.innerHTML = '<div class="upload-progress">Загружаем фото…</div>';
+    placeholder.innerHTML = '<div class="upload-progress">' + (isVideo ? "Загружаем видео…" : "Загружаем фото…") + '</div>';
     if (box) { box.appendChild(placeholder); box.scrollTop = box.scrollHeight; }
 
     try {
-      const url = await uploadToCloudinary(file, CLOUDINARY_IMAGE_URL);
+      // Cloudinary принимает видео через тот же эндпоинт /video/upload,
+      // что уже используется для голосовых сообщений (CLOUDINARY_AUDIO_URL —
+      // по сути просто "video" resource type в Cloudinary, годится и для
+      // аудио, и для видео).
+      const url = await uploadToCloudinary(file, isVideo ? CLOUDINARY_AUDIO_URL : CLOUDINARY_IMAGE_URL);
       await addDoc(collection(db, "chats", currentChatId, "messages"), {
-        type: "image",
+        type: isVideo ? "video" : "image",
         mediaUrl: url,
         senderId: currentUser.uid,
         createdAt: serverTimestamp()
       });
       await setDoc(doc(db, "chats", currentChatId), {
-        lastMessage: "📷 Фото",
+        lastMessage: isVideo ? "🎥 Видео" : "📷 Фото",
         lastMessageAt: serverTimestamp(),
         lastMessageBy: currentUser.uid,
         ["lastReadAt." + currentUser.uid]: serverTimestamp()
       }, { merge: true });
       await reviveChatForOtherMembers(currentChatId, chatForFile?.members);
     } catch (err) {
-      alert("Не удалось загрузить фото: " + err.message);
+      alert("Не удалось загрузить " + (isVideo ? "видео" : "фото") + ": " + err.message);
     } finally {
       placeholder.remove();
     }
