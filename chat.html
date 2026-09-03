@@ -592,6 +592,36 @@
     position: relative;
   }
 
+  /* ===== АВАТАРКА ОТПРАВИТЕЛЯ В ПЕРЕПИСКЕ (как в WhatsApp) ===== */
+  .msg-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    align-self: flex-end;
+    margin-bottom: 2px;
+    background: var(--accent);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    overflow: hidden;
+    cursor: pointer;
+  }
+
+  .msg-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Placeholder держит место аватарки там, где она скрыта (не первое
+     сообщение в подряд идущей группе одного отправителя) — иначе пузыри
+     "прыгали" бы по горизонтали внутри одной группы сообщений. */
+  .msg-avatar-spacer { width: 28px; flex-shrink: 0; }
+
   /* ===== ВЫДЕЛЕНИЕ НЕСКОЛЬКИХ СООБЩЕНИЙ ===== */
 
   .msg-row-inner {
@@ -1191,6 +1221,70 @@
   .profile-msg.error { color: var(--error, #c0392b); }
   .profile-msg.info { color: var(--accent-dark); }
 
+  /* ===== МОДАЛКА: ПРОФИЛЬ СОБЕСЕДНИКА (просмотр) ===== */
+  .view-profile-avatar-row {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+
+  .view-profile-avatar {
+    width: 112px;
+    height: 112px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 34px;
+    font-weight: 700;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .view-profile-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .view-profile-name {
+    text-align: center;
+    font-size: 19px;
+    font-weight: 700;
+    margin-bottom: 2px;
+  }
+
+  .view-profile-group {
+    text-align: center;
+    font-size: 13.5px;
+    color: var(--muted);
+    margin-bottom: 18px;
+  }
+
+  .view-profile-field {
+    padding: 11px 4px;
+    border-top: 1px solid var(--line);
+  }
+
+  .view-profile-field:last-child { padding-bottom: 2px; }
+
+  .view-profile-field label {
+    display: block;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  .view-profile-field .value {
+    font-size: 14.5px;
+    word-break: break-word;
+  }
+
   .modal-btn.logout {
     background: #3a2422;
     color: var(--error, #c0392b);
@@ -1377,6 +1471,34 @@
       <button class="modal-btn logout" onclick="handleLogout()">Выйти</button>
       <button class="modal-btn cancel" id="profileCancelBtn" onclick="closeProfileModal()">Отмена</button>
       <button class="modal-btn confirm" id="profileSaveBtn" onclick="saveProfile()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- МОДАЛКА: ПРОФИЛЬ СОБЕСЕДНИКА (открывается по клику на аватарку в переписке) -->
+<div class="modal-overlay" id="viewProfileModal" onclick="if(event.target===this) closeViewProfileModal()">
+  <div class="modal">
+    <div class="view-profile-avatar-row">
+      <div class="view-profile-avatar" id="viewProfileAvatar">?</div>
+    </div>
+    <div class="view-profile-name" id="viewProfileName"></div>
+    <div class="view-profile-group" id="viewProfileGroupTop"></div>
+
+    <div class="view-profile-field">
+      <label>Имя</label>
+      <div class="value" id="viewProfileNameField">—</div>
+    </div>
+    <div class="view-profile-field">
+      <label>Gmail</label>
+      <div class="value" id="viewProfileEmailField">—</div>
+    </div>
+    <div class="view-profile-field">
+      <label>Группа</label>
+      <div class="value" id="viewProfileGroupField">—</div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="modal-btn cancel" onclick="closeViewProfileModal()">Закрыть</button>
     </div>
   </div>
 </div>
@@ -1669,6 +1791,39 @@
     document.getElementById("profileModal").classList.remove("show");
     if (pendingAvatarPreviewUrl) { URL.revokeObjectURL(pendingAvatarPreviewUrl); pendingAvatarPreviewUrl = null; }
     pendingAvatarFile = null;
+  }
+
+  // ---------- ПРОФИЛЬ СОБЕСЕДНИКА (просмотр по клику на аватарку в чате) ----------
+  window.openUserProfileModal = function(uid) {
+    if (!uid) return;
+    const data = uid === currentUser.uid
+      ? { ...currentUserData }
+      : (allUsers[uid] || {});
+
+    const name = data.name || data.email || "Пользователь";
+    const isMe = uid === currentUser.uid;
+
+    const avatarEl = document.getElementById("viewProfileAvatar");
+    if (data.photoURL) {
+      avatarEl.innerHTML = `<img src="${data.photoURL}">`;
+    } else {
+      avatarEl.innerHTML = "";
+      avatarEl.textContent = initials(name);
+    }
+
+    document.getElementById("viewProfileName").textContent = name + (isMe ? " (вы)" : "");
+    document.getElementById("viewProfileGroupTop").textContent = data.group || "";
+    document.getElementById("viewProfileGroupTop").style.display = data.group ? "" : "none";
+
+    document.getElementById("viewProfileNameField").textContent = data.name || "—";
+    document.getElementById("viewProfileEmailField").textContent = data.email || "—";
+    document.getElementById("viewProfileGroupField").textContent = data.group || "—";
+
+    document.getElementById("viewProfileModal").classList.add("show");
+  }
+
+  window.closeViewProfileModal = function() {
+    document.getElementById("viewProfileModal")?.classList.remove("show");
   }
 
   function setProfileAvatarPreview(url, name) {
@@ -2647,14 +2802,16 @@
         row.className = "msg-row " + (isMe ? "me" : "them");
         row.dataset.id = msgId;
 
+        const showAvatar = !isMe && msg.senderId !== lastSender;
         let senderLabel = "";
-        if (!isMe && msg.senderId !== lastSender) {
+        if (showAvatar) {
           senderLabel = `<div class="msg-sender">${escapeHtml(allUsers[msg.senderId]?.name || "Пользователь")}</div>`;
         }
         lastSender = msg.senderId;
 
         const time = msg.createdAt?.toDate ? formatTime(msg.createdAt.toDate()) : "";
 
+        if (!isMe) row.appendChild(renderMsgAvatar(msg.senderId, showAvatar));
         row.appendChild(renderBubble(msg, msgId, senderLabel, time, isMe));
         if (selectionMode && selectedMessageIds.has(msgId)) row.classList.add("selected");
         attachRowGestures(row, msgId);
@@ -2691,13 +2848,15 @@
       row.className = "msg-row " + (isMe ? "me" : "them");
       row.dataset.id = msgId;
 
+      const showAvatar = !isMe && msg.senderId !== lastSender;
       let senderLabel = "";
-      if (!isMe && msg.senderId !== lastSender) {
+      if (showAvatar) {
         senderLabel = `<div class="msg-sender">${escapeHtml(allUsers[msg.senderId]?.name || "Пользователь")}</div>`;
       }
       lastSender = msg.senderId;
 
       const time = msg.createdAt?.toDate ? formatTime(msg.createdAt.toDate()) : "";
+      if (!isMe) row.appendChild(renderMsgAvatar(msg.senderId, showAvatar));
       row.appendChild(renderBubble(msg, msgId, senderLabel, time, isMe));
       if (selectionMode && selectedMessageIds.has(msgId)) row.classList.add("selected");
       attachRowGestures(row, msgId);
@@ -2724,6 +2883,28 @@
       <span class="reply-name">${name}</span>
       <span class="reply-text">${text}</span>
     </div>`;
+  }
+
+  // Аватарка отправителя слева от чужого сообщения (как в WhatsApp): при
+  // нескольких подряд идущих сообщениях одного и того же человека аватарка
+  // рисуется только у последнего сообщения группы, а на остальных строках
+  // остаётся невидимый спейсер того же размера, чтобы пузыри не съезжали.
+  function renderMsgAvatar(senderId, visible) {
+    const wrap = document.createElement("div");
+    if (!visible) {
+      wrap.className = "msg-avatar-spacer";
+      return wrap;
+    }
+    const data = allUsers[senderId] || {};
+    wrap.className = "msg-avatar";
+    wrap.title = data.name || "Пользователь";
+    wrap.onclick = (e) => { e.stopPropagation(); openUserProfileModal(senderId); };
+    if (data.photoURL) {
+      wrap.innerHTML = `<img src="${data.photoURL}" draggable="false">`;
+    } else {
+      wrap.textContent = initials(data.name);
+    }
+    return wrap;
   }
 
   function renderBubble(msg, msgId, senderLabelHTML, time, isMe) {
