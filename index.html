@@ -290,7 +290,7 @@
     <div class="mark-dot"></div>
     <div class="mark-text">Мессенджер</div>
   </div>
-  <p class="tagline">Общий чат школы, классы и личные сообщения — в одном месте.</p>
+  <p class="tagline">Общий чат учеников 8-го училища</p>
 
   <div class="card">
     <div class="tabs">
@@ -338,7 +338,8 @@
     <div class="msg" id="msgBox"></div>
   </div>
 
-  <p class="foot">Продолжая, ты соглашаешься быть вежливым собеседником.</p>
+  <p class="foot">АККУРАТНО ЛЕЛ КХУ ЧОХЬ, ДУКХ ОЬЙХЬАЗ МА ДУЬЛ, ВАЙ ВЗЛОМАТЬ ДИН НАХАЛ ДАХА АЬХЬ ДАЦ</p>
+  <p20 class="foot">при регистрации вы соглашаетесь на то что владелец сайта не несёт ответственность за сообщение на данном сайте, и за нелегальный или другой вид способа изза которого могут быть проблемы при использовании, а так же за то что ваш чат могут взломать, хотя только настоящие программисты смогут, и то не факт </p20>
 </div>
 
 <!-- Firebase SDK через CDN — никакого npm install не требуется -->
@@ -419,16 +420,16 @@
 
   function friendlyError(code) {
     const map = {
-      "auth/invalid-email": "Некорректный email.",
-      "auth/user-not-found": "Такого пользователя не существует.",
-      "auth/wrong-password": "Неверный пароль.",
-      "auth/invalid-credential": "Неверный email или пароль.",
-      "auth/email-already-in-use": "Этот email уже зарегистрирован.",
-      "auth/weak-password": "Пароль слишком простой (минимум 6 символов).",
+      "auth/invalid-email": "Нийс йац email.",
+      "auth/user-not-found": "Ишт пользователь вавац.",
+      "auth/wrong-password": "Нийс яц хьа пароль.",
+      "auth/invalid-credential": "Нийс яц хьа email или пароль.",
+      "auth/email-already-in-use": "Ишт email уже йазин йолш йу.",
+      "auth/weak-password": "Пароль дукх простой йу (минимум 6 символов).",
       "auth/popup-closed-by-user": "Окно входа было закрыто.",
-      "auth/network-request-failed": "Проблема с интернет-соединением."
+      "auth/network-request-failed": "Проблема с интернет."
     };
-    return map[code] || "Что-то пошло не так. Попробуй ещё раз.";
+    return map[code] || "Что-то пошло не так. Юг1 хьажа.";
   }
 
   // Создаёт профиль пользователя в Firestore и добавляет его в глобальный чат
