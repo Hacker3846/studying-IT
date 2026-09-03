@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Вход — Мессенджер</title>
+<script>
+  (function() {
+    var saved = localStorage.getItem("theme");
+    if (saved === "dark") document.documentElement.setAttribute("data-theme", "dark");
+  })();
+</script>
 
 <style>
   :root {
@@ -17,6 +23,17 @@
     --error: #c0392b;
   }
 
+  html[data-theme="dark"] {
+    --ink: #eceae4;
+    --paper: #15161a;
+    --card: #1e2025;
+    --accent: #5c7cfa;
+    --accent-dark: #7c96ff;
+    --line: #2f3138;
+    --muted: #85848c;
+    --error: #ff6b6b;
+  }
+
   * { box-sizing: border-box; }
 
   html, body {
@@ -26,6 +43,7 @@
     background: var(--paper);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     color: var(--ink);
+    transition: background 0.2s ease, color 0.2s ease;
   }
 
   body {
@@ -241,9 +259,31 @@
   }
 
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ===== ПЕРЕКЛЮЧАТЕЛЬ ТЕМЫ ===== */
+  .theme-fab {
+    position: fixed;
+    top: 18px;
+    right: 18px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--card);
+    border: 1.5px solid var(--line);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    transition: border-color 0.15s ease, background 0.2s ease;
+  }
+
+  .theme-fab:hover { border-color: var(--accent); }
 </style>
 </head>
 <body>
+
+<button class="theme-fab" id="themeFab" onclick="toggleTheme()" title="Переключить тему">☀️</button>
 
 <div class="wrap">
   <div class="mark">
@@ -343,6 +383,20 @@
       window.location.href = "chat.html";
     }
   });
+
+  // ---------- ТЕМА ----------
+  function updateThemeFab() {
+    const fab = document.getElementById("themeFab");
+    if (!fab) return;
+    fab.textContent = document.documentElement.getAttribute("data-theme") === "dark" ? "🌙" : "☀️";
+  }
+  window.toggleTheme = function() {
+    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    document.documentElement.setAttribute("data-theme", isDark ? "light" : "dark");
+    localStorage.setItem("theme", isDark ? "light" : "dark");
+    updateThemeFab();
+  }
+  updateThemeFab();
 
   window.switchTab = function(tab) {
     const isLogin = tab === "login";

@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0">
 <title>Мессенджер</title>
+<script>
+  (function() {
+    var saved = localStorage.getItem("theme");
+    if (saved === "dark") document.documentElement.setAttribute("data-theme", "dark");
+  })();
+</script>
 
 <style>
   :root {
@@ -18,6 +24,18 @@
     --bubble-them: #ffffff;
   }
 
+  html[data-theme="dark"] {
+    --ink: #eceae4;
+    --paper: #15161a;
+    --card: #1e2025;
+    --accent: #5c7cfa;
+    --accent-dark: #7c96ff;
+    --line: #2f3138;
+    --muted: #85848c;
+    --bubble-me: #3454d1;
+    --bubble-them: #262930;
+  }
+
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
   html, body {
@@ -28,6 +46,7 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     color: var(--ink);
     background: var(--paper);
+    transition: background 0.2s ease, color 0.2s ease;
   }
 
   #app {
@@ -90,6 +109,15 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: hidden;
+    padding: 0;
+    flex-shrink: 0;
+  }
+
+  #meBtn img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
 
   #newChatBtn {
@@ -534,6 +562,149 @@
   }
   #groupNameInput:focus { border-color: var(--accent); }
 
+  /* ===== МОДАЛКА ПРОФИЛЯ ===== */
+  .profile-avatar-row {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 18px;
+  }
+
+  .profile-avatar-wrap {
+    position: relative;
+    width: 84px;
+    height: 84px;
+    cursor: pointer;
+  }
+
+  .profile-avatar-img {
+    width: 84px;
+    height: 84px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    font-weight: 700;
+    overflow: hidden;
+  }
+
+  .profile-avatar-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .profile-avatar-edit {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--card);
+    border: 1.5px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink);
+  }
+
+  .profile-avatar-edit svg { width: 14px; height: 14px; }
+
+  .profile-field {
+    margin-bottom: 14px;
+  }
+
+  .profile-field label {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 5px;
+  }
+
+  .profile-field input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    color: var(--ink);
+    background: var(--card);
+  }
+
+  .profile-field input:focus { border-color: var(--accent); }
+  .profile-field .hint { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+
+  .profile-msg {
+    font-size: 12.5px;
+    margin-top: 4px;
+    display: none;
+  }
+  .profile-msg.show { display: block; }
+  .profile-msg.error { color: var(--error, #c0392b); }
+  .profile-msg.info { color: var(--accent-dark); }
+
+  .modal-btn.logout {
+    background: #fbeae8;
+    color: var(--error, #c0392b);
+  }
+
+  html[data-theme="dark"] .modal-btn.logout {
+    background: #3a2422;
+  }
+
+  /* ===== ПЕРЕКЛЮЧАТЕЛЬ ТЕМЫ ===== */
+  .theme-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 0 0 0;
+    margin-bottom: 4px;
+  }
+
+  .theme-toggle-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .theme-toggle-switch {
+    width: 44px;
+    height: 25px;
+    border-radius: 13px;
+    background: var(--line);
+    border: none;
+    cursor: pointer;
+    position: relative;
+    flex-shrink: 0;
+    padding: 0;
+    transition: background 0.2s ease;
+  }
+
+  .theme-toggle-switch.on { background: var(--accent); }
+
+  .theme-toggle-knob {
+    position: absolute;
+    top: 2.5px;
+    left: 2.5px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: white;
+    transition: transform 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+  }
+
+  .theme-toggle-switch.on .theme-toggle-knob { transform: translateX(19px); }
+
   /* ===== ЛАЙТБОКС ФОТО ===== */
   #lightbox {
     position: fixed;
@@ -579,7 +750,7 @@
         <div class="mark-dot"></div>
         <div class="mark-text">Мессенджер</div>
       </div>
-      <button id="meBtn" title="Выйти" onclick="handleLogout()">·</button>
+      <button id="meBtn" title="Мой профиль" onclick="openProfileModal()">·</button>
     </div>
     <button id="newChatBtn" onclick="openNewChatModal()">+ Новый чат</button>
     <div id="chatList">
@@ -601,6 +772,49 @@
 </div>
 
 <input type="file" id="fileInput" accept="image/*" style="display:none;">
+<input type="file" id="avatarFileInput" accept="image/*" style="display:none;">
+
+<!-- МОДАЛКА: МОЙ ПРОФИЛЬ -->
+<div class="modal-overlay" id="profileModal">
+  <div class="modal">
+    <h3>Мой профиль</h3>
+
+    <div class="profile-avatar-row">
+      <div class="profile-avatar-wrap" onclick="document.getElementById('avatarFileInput').click()">
+        <div class="profile-avatar-img" id="profileAvatarPreview">?</div>
+        <div class="profile-avatar-edit">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 20H21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M16.5 3.5C17.33 2.67 18.67 2.67 19.5 3.5C20.33 4.33 20.33 5.67 19.5 6.5L7 19L3 20L4 16L16.5 3.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="profile-field">
+      <label for="profileNameInput">Имя</label>
+      <input type="text" id="profileNameInput" placeholder="Как тебя зовут" maxlength="50">
+    </div>
+
+    <div class="profile-field">
+      <label for="profileGroupInput">Группа</label>
+      <input type="text" id="profileGroupInput" placeholder="например: Программист ИС-21" maxlength="50">
+      <div class="hint">Профессия + номер группы</div>
+    </div>
+
+    <div class="profile-msg" id="profileMsg"></div>
+
+    <div class="theme-toggle">
+      <div class="theme-toggle-label">Тёмная тема</div>
+      <button class="theme-toggle-switch" id="themeToggleBtn" onclick="toggleTheme()">
+        <div class="theme-toggle-knob" id="themeToggleKnob">☀️</div>
+      </button>
+    </div>
+
+    <div class="modal-actions">
+      <button class="modal-btn logout" onclick="handleLogout()">Выйти</button>
+      <button class="modal-btn cancel" onclick="closeProfileModal()">Отмена</button>
+      <button class="modal-btn confirm" id="profileSaveBtn" onclick="saveProfile()">Сохранить</button>
+    </div>
+  </div>
+</div>
 
 <!-- МОДАЛКА: НОВЫЙ ЧАТ -->
 <div class="modal-overlay" id="newChatModal">
@@ -682,16 +896,158 @@
     currentUser = user;
     const snap = await getDoc(doc(db, "users", user.uid));
     currentUserData = snap.exists() ? snap.data() : { name: user.email };
-    document.getElementById("meBtn").textContent = initials(currentUserData.name);
-    document.getElementById("meBtn").title = currentUserData.name + " — нажми, чтобы выйти";
+    renderMeBtn();
 
     await loadAllUsers();
     loadChatList();
   });
 
+  function renderMeBtn() {
+    const btn = document.getElementById("meBtn");
+    if (currentUserData.photoURL) {
+      btn.innerHTML = `<img src="${currentUserData.photoURL}">`;
+    } else {
+      btn.textContent = initials(currentUserData.name);
+    }
+    btn.title = currentUserData.name + (currentUserData.group ? " · " + currentUserData.group : "");
+  }
+
   window.handleLogout = function() {
     if (confirm("Выйти из аккаунта?")) {
       signOut(auth);
+    }
+  }
+
+  // ---------- ТЕМА ----------
+  window.toggleTheme = function() {
+    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    setTheme(!isDark);
+  }
+
+  function setTheme(dark) {
+    document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+    localStorage.setItem("theme", dark ? "dark" : "light");
+    const btn = document.getElementById("themeToggleBtn");
+    const knob = document.getElementById("themeToggleKnob");
+    if (btn) btn.classList.toggle("on", dark);
+    if (knob) knob.textContent = dark ? "🌙" : "☀️";
+  }
+
+  function initThemeToggleUI() {
+    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    const btn = document.getElementById("themeToggleBtn");
+    const knob = document.getElementById("themeToggleKnob");
+    if (btn) btn.classList.toggle("on", isDark);
+    if (knob) knob.textContent = isDark ? "🌙" : "☀️";
+  }
+
+  // ---------- МОДАЛКА ПРОФИЛЯ ----------
+  let pendingAvatarFile = null;
+  let pendingAvatarPreviewUrl = null;
+
+  window.openProfileModal = function() {
+    pendingAvatarFile = null;
+    if (pendingAvatarPreviewUrl) { URL.revokeObjectURL(pendingAvatarPreviewUrl); pendingAvatarPreviewUrl = null; }
+
+    document.getElementById("profileNameInput").value = currentUserData.name || "";
+    document.getElementById("profileGroupInput").value = currentUserData.group || "";
+    setProfileAvatarPreview(currentUserData.photoURL, currentUserData.name);
+    hideProfileMsg();
+    initThemeToggleUI();
+
+    const saveBtn = document.getElementById("profileSaveBtn");
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Сохранить";
+
+    document.getElementById("profileModal").classList.add("show");
+  }
+
+  window.closeProfileModal = function() {
+    document.getElementById("profileModal").classList.remove("show");
+    if (pendingAvatarPreviewUrl) { URL.revokeObjectURL(pendingAvatarPreviewUrl); pendingAvatarPreviewUrl = null; }
+    pendingAvatarFile = null;
+  }
+
+  function setProfileAvatarPreview(url, name) {
+    const el = document.getElementById("profileAvatarPreview");
+    if (url) {
+      el.innerHTML = `<img src="${url}">`;
+    } else {
+      el.textContent = initials(name);
+    }
+  }
+
+  function showProfileMsg(text, type) {
+    const box = document.getElementById("profileMsg");
+    box.textContent = text;
+    box.className = "profile-msg show " + type;
+  }
+  function hideProfileMsg() {
+    document.getElementById("profileMsg").className = "profile-msg";
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    const avatarInput = document.getElementById("avatarFileInput");
+    if (avatarInput) {
+      avatarInput.addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        e.target.value = "";
+        if (!file) return;
+
+        if (!file.type.startsWith("image/")) {
+          showProfileMsg("Можно загрузить только изображение.", "error");
+          return;
+        }
+        if (file.size > 8 * 1024 * 1024) {
+          showProfileMsg("Файл слишком большой (максимум 8 МБ).", "error");
+          return;
+        }
+
+        if (pendingAvatarPreviewUrl) URL.revokeObjectURL(pendingAvatarPreviewUrl);
+        pendingAvatarFile = file;
+        pendingAvatarPreviewUrl = URL.createObjectURL(file);
+        setProfileAvatarPreview(pendingAvatarPreviewUrl, "");
+        hideProfileMsg();
+      });
+    }
+  });
+
+  window.saveProfile = async function() {
+    const name = document.getElementById("profileNameInput").value.trim();
+    const group = document.getElementById("profileGroupInput").value.trim();
+
+    if (!name) {
+      showProfileMsg("Введи имя.", "error");
+      return;
+    }
+
+    const saveBtn = document.getElementById("profileSaveBtn");
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Сохраняем…";
+    hideProfileMsg();
+
+    try {
+      let photoURL = currentUserData.photoURL || null;
+
+      if (pendingAvatarFile) {
+        photoURL = await uploadToCloudinary(pendingAvatarFile, CLOUDINARY_IMAGE_URL);
+      }
+
+      const updates = { name, group, photoURL };
+      await setDoc(doc(db, "users", currentUser.uid), updates, { merge: true });
+
+      currentUserData = { ...currentUserData, ...updates };
+      allUsers[currentUser.uid] = { ...allUsers[currentUser.uid], ...updates };
+
+      renderMeBtn();
+      closeProfileModal();
+
+      // Обновляем список чатов и открытый чат, если в них показывалось имя/фото
+      renderChatList(await currentChatsSnapshotFallback());
+    } catch (err) {
+      showProfileMsg("Не удалось сохранить: " + err.message, "error");
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Сохранить";
     }
   }
 
@@ -738,6 +1094,13 @@
     // личный чат — показываем имя собеседника
     const otherId = (chat.members || []).find(id => id !== currentUser.uid);
     return allUsers[otherId]?.name || "Пользователь";
+  }
+
+  function chatHeaderSubText(chat) {
+    if (chat.type === "group") return (chat.members?.length || 0) + " участников";
+    if (chat.type === "global") return "Все зарегистрированные";
+    const otherId = (chat.members || []).find(id => id !== currentUser.uid);
+    return allUsers[otherId]?.group || "Личный чат";
   }
 
   function chatAvatarHTML(chat) {
@@ -794,7 +1157,7 @@
         <button id="backBtn" onclick="closeChat()">‹</button>
         <div>
           <div id="chatHeaderName">${escapeHtml(chatDisplayName(chatData))}</div>
-          <div id="chatHeaderSub">${chatData.type === "group" ? (chatData.members?.length || 0) + " участников" : chatData.type === "global" ? "Все зарегистрированные" : "Личный чат"}</div>
+          <div id="chatHeaderSub">${chatHeaderSubText(chatData)}</div>
         </div>
       </div>
       <div id="messages"></div>
@@ -1040,7 +1403,7 @@
       row.className = "modal-user";
       row.innerHTML = `
         <input type="checkbox" data-uid="${uid}">
-        <div class="modal-user-name">${escapeHtml(data.name || data.email)}</div>
+        <div class="modal-user-name">${escapeHtml(data.name || data.email)}${data.group ? ' <span style="color:var(--muted);font-weight:400;">· ' + escapeHtml(data.group) + '</span>' : ''}</div>
       `;
       const checkbox = row.querySelector("input");
       checkbox.addEventListener("change", () => {
