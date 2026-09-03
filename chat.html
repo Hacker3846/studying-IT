@@ -319,12 +319,30 @@
 
   .chat-info { flex: 1; min-width: 0; }
 
+  .chat-name-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
   .chat-name {
     font-size: 14.5px;
     font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    min-width: 0;
+  }
+
+  /* Кружочек непрочитанного — как в обычных мессенджерах. Не показывается
+     у глобального чата (см. isChatUnread) и пропадает сразу при открытии
+     чата, так что специальная "погашенная" вариация тут не нужна. */
+  .unread-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex-shrink: 0;
   }
 
   .chat-preview {
@@ -901,7 +919,13 @@
     outline: none;
     max-height: 120px;
     line-height: 1.4;
+    color: var(--ink);
+    background: var(--card);
   }
+
+  html:not([data-theme="light"]) #msgInput { color: var(--ink); }
+
+  #msgInput::placeholder { color: var(--muted); }
 
   #msgInput:focus { border-color: var(--accent); }
 
@@ -1045,6 +1069,8 @@
     font-family: inherit;
     margin-bottom: 12px;
     outline: none;
+    color: var(--ink);
+    background: var(--card);
   }
   #groupNameInput:focus { border-color: var(--accent); }
 
@@ -1775,9 +1801,50 @@
     });
   }
 
+  // Возвращает метку времени последней активности чата в миллисекундах,
+  // для сортировки по свежести. lastMessageAt появляется только после
+  // первого сообщения — пока его нет, используем createdAt чата, чтобы
+  // свежесозданные, но ещё пустые чаты не проваливались в конец списка.
+  function chatActivityMs(chat) {
+    const ts = chat.lastMessageAt || chat.createdAt;
+    return ts?.toMillis ? ts.toMillis() : 0;
+  }
+
+  // ---------- НЕПРОЧИТАННЫЕ СООБЩЕНИЯ ----------
+  // lastReadAt хранится прямо на документе чата как карта uid -> Timestamp
+  // (а не в подколлекции), чтобы отметка "прочитано" обновлялась одним
+  // updateDoc через dot-notation и участвовала в том же onSnapshot, что и
+  // остальной список чатов — без отдельной подписки на каждый чат.
+  // Глобальный чат намеренно исключён — там кружочек не показывается.
+  function isChatUnread(chat) {
+    if (chat.type === "global") return false;
+    if (!chat.lastMessageAt) return false;
+    if (chat.lastMessageBy === currentUser.uid) return false;
+    const readTs = chat.lastReadAt?.[currentUser.uid];
+    if (!readTs) return true;
+    const readMs = readTs.toMillis ? readTs.toMillis() : 0;
+    const lastMs = chat.lastMessageAt.toMillis ? chat.lastMessageAt.toMillis() : 0;
+    return lastMs > readMs;
+  }
+
+  // Отмечает чат прочитанным лично для текущего пользователя. Вызывается
+  // при открытии чата — ошибку не показываем пользователю (это фоновая
+  // техническая операция, не стоит мешать ей открытию переписки).
+  async function markChatAsRead(chatId) {
+    try {
+      await updateDoc(doc(db, "chats", chatId), {
+        ["lastReadAt." + currentUser.uid]: serverTimestamp()
+      });
+    } catch (err) {
+      console.error("Не удалось отметить чат прочитанным:", err);
+    }
+  }
+
   // Глобальный чат всегда сверху; заблокированные (кем бы то ни было —
   // мной или, для личных чатов, собеседником) — всегда внизу списка,
   // но не скрываются, чтобы их можно было явно разблокировать/удалить.
+  // Внутри этих двух групп — сортировка по свежести последнего сообщения
+  // (как в обычных мессенджерах), самые новые сверху.
   function sortChats(chats) {
     return [...chats].sort((a, b) => {
       if (a.type === "global") return -1;
@@ -1785,7 +1852,7 @@
       const aBlocked = isChatBlockedForMe(a) ? 1 : 0;
       const bBlocked = isChatBlockedForMe(b) ? 1 : 0;
       if (aBlocked !== bBlocked) return aBlocked - bBlocked;
-      return (a.name || "").localeCompare(b.name || "");
+      return chatActivityMs(b) - chatActivityMs(a);
     });
   }
 
@@ -1870,6 +1937,7 @@
     list.innerHTML = "";
     chats.forEach(chat => {
       const blocked = isChatBlockedForMe(chat);
+      const unread = isChatUnread(chat);
       const item = document.createElement("div");
       item.className = "chat-item"
         + (chat.id === currentChatId ? " active" : "")
@@ -1878,7 +1946,10 @@
       item.innerHTML = `
         ${chatAvatarHTML(chat)}
         <div class="chat-info">
-          <div class="chat-name">${escapeHtml(chatDisplayName(chat))}</div>
+          <div class="chat-name-row">
+            <div class="chat-name">${escapeHtml(chatDisplayName(chat))}</div>
+            ${unread ? '<div class="unread-dot"></div>' : ''}
+          </div>
           <div class="chat-preview">${escapeHtml(chat.lastMessage || "Нет сообщений")}</div>
         </div>
       `;
@@ -2202,18 +2273,37 @@
   // случае трактуем "вышел из группы" как то же самое, что "заблокировал
   // для себя навсегда"), админ не должен иметь возможность добавить этого
   // человека обратно без явного снятия блокировки.
+  //
+  // ПЕРЕДАЧА АДМИНКИ: если группу покидает именно создатель (chat.createdBy),
+  // права переходят следующему по порядку вступления участнику — то есть
+  // первому в members сразу после самого админа. members заполняется в
+  // порядке присоединения (создатель первым при создании группы, дальше
+  // arrayUnion всегда дописывает новых в конец), так что "member[1] после
+  // удаления member[0]-админа" и есть "тот, кто вошёл в группу следующим
+  // после админа". Если уходящий — не создатель, createdBy не трогаем.
   window.leaveGroup = async function(chatId) {
     const chat = findChatById(chatId) || (await getChatDoc(chatId));
     if (!chat) return;
 
-    const ok = confirm("Выйти из группы «" + (chat.name || "Группа") + "»? Обратно тебя сможет добавить только админ группы, и только после того, как явно снимет блокировку в списке участников.");
+    const members = chat.members || [];
+    const isCreator = chat.createdBy === currentUser.uid;
+    const remaining = members.filter(uid => uid !== currentUser.uid);
+    const nextAdminId = isCreator && remaining.length > 0 ? remaining[0] : null;
+
+    const confirmText = nextAdminId
+      ? "Выйти из группы «" + (chat.name || "Группа") + "»? Ты — админ группы, поэтому права админа перейдут пользователю «" + (allUsers[nextAdminId]?.name || "следующий участник") + "»."
+      : "Выйти из группы «" + (chat.name || "Группа") + "»? Обратно тебя сможет добавить только админ группы, и только после того, как явно снимет блокировку в списке участников.";
+    const ok = confirm(confirmText);
     if (!ok) return;
 
     try {
-      await updateDoc(doc(db, "chats", chatId), {
+      const update = {
         members: arrayRemove(currentUser.uid),
         blockedUsers: arrayUnion(currentUser.uid)
-      });
+      };
+      if (nextAdminId) update.createdBy = nextAdminId;
+
+      await updateDoc(doc(db, "chats", chatId), update);
       closeMembersModal();
       if (currentChatId === chatId) closeChat();
     } catch (err) {
@@ -2440,6 +2530,7 @@
     }
 
     listenToMessages(chatId);
+    markChatAsRead(chatId);
     lastChats = await currentChatsSnapshotFallback();
     renderChatList(filterChats(lastChats));
   }
@@ -3046,7 +3137,9 @@
       await addDoc(collection(db, "chats", currentChatId, "messages"), payload);
       await setDoc(doc(db, "chats", currentChatId), {
         lastMessage: text,
-        lastMessageAt: serverTimestamp()
+        lastMessageAt: serverTimestamp(),
+        lastMessageBy: currentUser.uid,
+        ["lastReadAt." + currentUser.uid]: serverTimestamp()
       }, { merge: true });
       await reviveChatForOtherMembers(currentChatId, chat?.members);
     } catch (err) {
@@ -3240,7 +3333,9 @@
       });
       await setDoc(doc(db, "chats", currentChatId), {
         lastMessage: "📷 Фото",
-        lastMessageAt: serverTimestamp()
+        lastMessageAt: serverTimestamp(),
+        lastMessageBy: currentUser.uid,
+        ["lastReadAt." + currentUser.uid]: serverTimestamp()
       }, { merge: true });
       await reviveChatForOtherMembers(currentChatId, chatForFile?.members);
     } catch (err) {
@@ -3387,7 +3482,9 @@
         });
         await setDoc(doc(db, "chats", currentChatId), {
           lastMessage: "🎤 Голосовое сообщение",
-          lastMessageAt: serverTimestamp()
+          lastMessageAt: serverTimestamp(),
+          lastMessageBy: currentUser.uid,
+          ["lastReadAt." + currentUser.uid]: serverTimestamp()
         }, { merge: true });
         await reviveChatForOtherMembers(currentChatId, chatForVoiceSend?.members);
       } catch (err) {
