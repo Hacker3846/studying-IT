@@ -432,7 +432,9 @@
     return map[code] || "Что-то пошло не так. Юг1 хьажа.";
   }
 
-  // Создаёт профиль пользователя в Firestore и добавляет его в глобальный чат
+  // Создаёт профиль пользователя в Firestore (если его ещё нет)
+  // и гарантирует, что пользователь состоит в глобальном чате —
+  // как при первой регистрации, так и при обычном логине уже существующего аккаунта.
   async function ensureUserProfile(user, displayNameOverride) {
     const userRef = doc(db, "users", user.uid);
     const existing = await getDoc(userRef);
@@ -444,23 +446,25 @@
         photoURL: user.photoURL || null,
         createdAt: serverTimestamp()
       });
+    }
 
-      // Добавляем пользователя в глобальный чат
-      const globalChatRef = doc(db, "chats", "global");
-      const globalChatSnap = await getDoc(globalChatRef);
+    // Эта часть выполняется ВСЕГДА (не только для новых пользователей),
+    // чтобы старые аккаунты, у которых глобальный чат почему-то отсутствует
+    // в members, тоже гарантированно в него попадали.
+    const globalChatRef = doc(db, "chats", "global");
+    const globalChatSnap = await getDoc(globalChatRef);
 
-      if (!globalChatSnap.exists()) {
-        await setDoc(globalChatRef, {
-          type: "global",
-          name: "Общий чат",
-          members: [user.uid],
-          createdAt: serverTimestamp()
-        });
-      } else {
-        await updateDoc(globalChatRef, {
-          members: arrayUnion(user.uid)
-        });
-      }
+    if (!globalChatSnap.exists()) {
+      await setDoc(globalChatRef, {
+        type: "global",
+        name: "Общий чат",
+        members: [user.uid],
+        createdAt: serverTimestamp()
+      });
+    } else if (!(globalChatSnap.data().members || []).includes(user.uid)) {
+      await updateDoc(globalChatRef, {
+        members: arrayUnion(user.uid)
+      });
     }
   }
 

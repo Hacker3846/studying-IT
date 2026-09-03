@@ -135,6 +135,40 @@
 
   #newChatBtn:hover { border-color: var(--accent); color: var(--accent); }
 
+  /* ===== ПОИСК ===== */
+  .search-box {
+    margin: 0 18px 10px 18px;
+    position: relative;
+  }
+
+  .search-box svg {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 15px;
+    height: 15px;
+    color: var(--muted);
+    pointer-events: none;
+  }
+
+  .search-box input {
+    width: 100%;
+    padding: 9px 12px 9px 34px;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    font-size: 13.5px;
+    font-family: inherit;
+    background: var(--paper);
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+
+  .search-box input:focus { border-color: var(--accent); }
+
+  .modal-list .search-box { margin: 0 0 12px 0; }
+
   #chatList {
     flex: 1;
     overflow-y: auto;
@@ -753,6 +787,10 @@
       <button id="meBtn" title="Мой профиль" onclick="openProfileModal()">·</button>
     </div>
     <button id="newChatBtn" onclick="openNewChatModal()">+ Новый чат</button>
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21L16.65 16.65" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <input type="text" id="chatSearchInput" placeholder="Поиск чатов…" oninput="handleChatSearch(this.value)">
+    </div>
     <div id="chatList">
       <div class="empty-hint">Загружаем чаты…</div>
     </div>
@@ -821,6 +859,10 @@
   <div class="modal">
     <h3 id="modalTitle">Новый чат</h3>
     <input type="text" id="groupNameInput" placeholder="Название группы" style="display:none;">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21L16.65 16.65" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <input type="text" id="userSearchInput" placeholder="Поиск по имени, группе или email…" oninput="handleUserSearch(this.value)">
+    </div>
     <div class="modal-list" id="userPickerList"></div>
     <div class="modal-actions">
       <button class="modal-btn cancel" onclick="closeNewChatModal()">Отмена</button>
@@ -849,7 +891,9 @@
     getDoc,
     getDocs,
     serverTimestamp,
-    limit
+    limit,
+    arrayUnion,
+    updateDoc
   } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -874,6 +918,9 @@
   let chatListUnsub = null;
   let selectedUserIds = new Set();
   let isGroupMode = false;
+  let lastChats = [];           // последний загруженный список чатов (для поиска)
+  let chatSearchQuery = "";
+  let userSearchQuery = "";
 
   // ---------- CLOUDINARY (хранение фото и голосовых) ----------
   const CLOUDINARY_CLOUD_NAME = "ctcszg0j";
@@ -898,9 +945,30 @@
     currentUserData = snap.exists() ? snap.data() : { name: user.email };
     renderMeBtn();
 
+    await ensureGlobalChatMembership(user.uid);
     await loadAllUsers();
     loadChatList();
   });
+
+  // Подстраховка: если пользователя почему-то нет в members глобального чата
+  // (например, профиль был создан до появления этой логики), добавляем его сюда же.
+  async function ensureGlobalChatMembership(uid) {
+    const globalChatRef = doc(db, "chats", "global");
+    const globalChatSnap = await getDoc(globalChatRef);
+
+    if (!globalChatSnap.exists()) {
+      await setDoc(globalChatRef, {
+        type: "global",
+        name: "Общий чат",
+        members: [uid],
+        createdAt: serverTimestamp()
+      });
+    } else if (!(globalChatSnap.data().members || []).includes(uid)) {
+      await updateDoc(globalChatRef, {
+        members: arrayUnion(uid)
+      });
+    }
+  }
 
   function renderMeBtn() {
     const btn = document.getElementById("meBtn");
@@ -1043,7 +1111,8 @@
       closeProfileModal();
 
       // Обновляем список чатов и открытый чат, если в них показывалось имя/фото
-      renderChatList(await currentChatsSnapshotFallback());
+      lastChats = await currentChatsSnapshotFallback();
+      renderChatList(filterChats(lastChats));
     } catch (err) {
       showProfileMsg("Не удалось сохранить: " + err.message, "error");
       saveBtn.disabled = false;
@@ -1056,9 +1125,21 @@
     return name.trim().split(/\s+/).slice(0,2).map(w => w[0].toUpperCase()).join("");
   }
 
-  async function loadAllUsers() {
-    const snap = await getDocs(collection(db, "users"));
-    snap.forEach(d => { allUsers[d.id] = d.data(); });
+  // Раньше это был одноразовый getDocs — из-за этого новые пользователи
+  // (например, второй зарегистрированный аккаунт) не появлялись в списке
+  // "Новый чат" и в поиске без перезагрузки страницы. Теперь это живая подписка.
+  function loadAllUsers() {
+    return new Promise((resolve) => {
+      let firstLoad = true;
+      onSnapshot(collection(db, "users"), (snap) => {
+        allUsers = {};
+        snap.forEach(d => { allUsers[d.id] = d.data(); });
+        if (firstLoad) {
+          firstLoad = false;
+          resolve();
+        }
+      });
+    });
   }
 
   // ---------- СПИСОК ЧАТОВ ----------
@@ -1080,11 +1161,28 @@
         return (a.name || "").localeCompare(b.name || "");
       });
 
-      renderChatList(chats);
+      lastChats = chats;
+      renderChatList(filterChats(chats));
     }, (err) => {
       console.error(err);
       document.getElementById("chatList").innerHTML =
         '<div class="empty-hint">Не получилось загрузить чаты. Проверь подключение.</div>';
+    });
+  }
+
+  // ---------- ПОИСК ПО ЧАТАМ ----------
+  window.handleChatSearch = function(value) {
+    chatSearchQuery = value;
+    renderChatList(filterChats(lastChats));
+  }
+
+  function filterChats(chats) {
+    const q = chatSearchQuery.trim().toLowerCase();
+    if (!q) return chats;
+    return chats.filter(chat => {
+      const name = chatDisplayName(chat).toLowerCase();
+      const preview = (chat.lastMessage || "").toLowerCase();
+      return name.includes(q) || preview.includes(q);
     });
   }
 
@@ -1119,7 +1217,9 @@
   function renderChatList(chats) {
     const list = document.getElementById("chatList");
     if (chats.length === 0) {
-      list.innerHTML = '<div class="empty-hint">Пока нет чатов. Начни новый!</div>';
+      list.innerHTML = chatSearchQuery.trim()
+        ? '<div class="empty-hint">Ничего не найдено по запросу «' + escapeHtml(chatSearchQuery.trim()) + '».</div>'
+        : '<div class="empty-hint">Пока нет чатов. Начни новый!</div>';
       return;
     }
     list.innerHTML = "";
@@ -1199,7 +1299,8 @@
     });
 
     listenToMessages(chatId);
-    renderChatList(await currentChatsSnapshotFallback());
+    lastChats = await currentChatsSnapshotFallback();
+    renderChatList(filterChats(lastChats));
   }
 
   // Небольшой helper: перерисовать список с подсветкой активного чата,
@@ -1384,18 +1485,43 @@
   window.openNewChatModal = function() {
     selectedUserIds = new Set();
     isGroupMode = false;
+    userSearchQuery = "";
     document.getElementById("modalTitle").textContent = "Новый чат";
     document.getElementById("groupNameInput").style.display = "none";
     document.getElementById("createChatBtn").disabled = true;
     document.getElementById("createChatBtn").textContent = "Создать";
 
+    const searchInput = document.getElementById("userSearchInput");
+    if (searchInput) searchInput.value = "";
+
+    renderUserPickerList();
+    document.getElementById("newChatModal").classList.add("show");
+  }
+
+  window.handleUserSearch = function(value) {
+    userSearchQuery = value;
+    renderUserPickerList();
+  }
+
+  function renderUserPickerList() {
     const list = document.getElementById("userPickerList");
     list.innerHTML = "";
 
-    const others = Object.entries(allUsers).filter(([uid]) => uid !== currentUser.uid);
+    const q = userSearchQuery.trim().toLowerCase();
+    let others = Object.entries(allUsers).filter(([uid]) => uid !== currentUser.uid);
+
+    if (q) {
+      others = others.filter(([, data]) => {
+        const haystack = [data.name, data.group, data.email].filter(Boolean).join(" ").toLowerCase();
+        return haystack.includes(q);
+      });
+    }
 
     if (others.length === 0) {
-      list.innerHTML = '<div class="empty-hint">Пока нет других зарегистрированных пользователей.</div>';
+      list.innerHTML = q
+        ? '<div class="empty-hint">Никого не найдено по запросу «' + escapeHtml(userSearchQuery.trim()) + '».</div>'
+        : '<div class="empty-hint">Пока нет других зарегистрированных пользователей.</div>';
+      return;
     }
 
     others.forEach(([uid, data]) => {
@@ -1406,6 +1532,7 @@
         <div class="modal-user-name">${escapeHtml(data.name || data.email)}${data.group ? ' <span style="color:var(--muted);font-weight:400;">· ' + escapeHtml(data.group) + '</span>' : ''}</div>
       `;
       const checkbox = row.querySelector("input");
+      checkbox.checked = selectedUserIds.has(uid);
       checkbox.addEventListener("change", () => {
         if (checkbox.checked) selectedUserIds.add(uid);
         else selectedUserIds.delete(uid);
@@ -1417,8 +1544,6 @@
       });
       list.appendChild(row);
     });
-
-    document.getElementById("newChatModal").classList.add("show");
   }
 
   window.closeNewChatModal = function() {
