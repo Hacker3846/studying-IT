@@ -1341,7 +1341,8 @@
 <!-- МОДАЛКА: МОЙ ПРОФИЛЬ -->
 <div class="modal-overlay" id="profileModal">
   <div class="modal">
-    <h3>Мой профиль</h3>
+    <h3 id="profileModalTitle">Мой профиль</h3>
+    <p class="hint" id="profileOnboardingHint" style="display:none;margin:-8px 0 14px 0;">Это разовая настройка — заполни имя и группу, чтобы продолжить. Их увидят другие участники чатов.</p>
 
     <div class="profile-avatar-row">
       <div class="profile-avatar-wrap" onclick="document.getElementById('avatarFileInput').click()">
@@ -1374,7 +1375,7 @@
 
     <div class="modal-actions">
       <button class="modal-btn logout" onclick="handleLogout()">Выйти</button>
-      <button class="modal-btn cancel" onclick="closeProfileModal()">Отмена</button>
+      <button class="modal-btn cancel" id="profileCancelBtn" onclick="closeProfileModal()">Отмена</button>
       <button class="modal-btn confirm" id="profileSaveBtn" onclick="saveProfile()">Сохранить</button>
     </div>
   </div>
@@ -1549,6 +1550,16 @@
     await ensureGlobalChatMembership(user.uid);
     await loadAllUsers();
     loadChatList();
+
+    // ПЕРВИЧНАЯ НАСТРОЙКА ПРОФИЛЯ: если у пользователя ещё не заполнена
+    // группа (единственное поле профиля, которое НЕ задаётся автоматически
+    // при регистрации — в отличие от имени, которое берётся из формы
+    // регистрации или email), считаем это признаком "только что зарегался,
+    // профиль не дозаполнен" и сразу открываем модалку профиля в
+    // обязательном режиме поверх списка чатов.
+    if (!currentUserData.group) {
+      openProfileModal({ forced: true });
+    }
   });
 
   // Подстраховка: если пользователя почему-то нет в members глобального чата
@@ -1620,8 +1631,11 @@
   // ---------- МОДАЛКА ПРОФИЛЯ ----------
   let pendingAvatarFile = null;
   let pendingAvatarPreviewUrl = null;
+  let profileOnboardingForced = false; // true — первичная настройка сразу после регистрации, отмена недоступна
 
-  window.openProfileModal = function() {
+  window.openProfileModal = function(opts) {
+    profileOnboardingForced = !!(opts && opts.forced);
+
     pendingAvatarFile = null;
     if (pendingAvatarPreviewUrl) { URL.revokeObjectURL(pendingAvatarPreviewUrl); pendingAvatarPreviewUrl = null; }
 
@@ -1635,10 +1649,23 @@
     saveBtn.disabled = false;
     saveBtn.textContent = "Сохранить";
 
+    // В обязательном режиме нет пути назад через "Отмена" — иначе можно
+    // было бы просто закрыть модалку и остаться без группы, а весь смысл
+    // первичной настройки в том, чтобы она была заполнена. "Выйти" из
+    // аккаунта оставляем доступным — это законный способ передумать,
+    // а не лазейка, оставляющая профиль недозаполненным.
+    const title = document.getElementById("profileModalTitle");
+    const hint = document.getElementById("profileOnboardingHint");
+    const cancelBtn = document.getElementById("profileCancelBtn");
+    if (title) title.textContent = profileOnboardingForced ? "Заполни профиль" : "Мой профиль";
+    if (hint) hint.style.display = profileOnboardingForced ? "block" : "none";
+    if (cancelBtn) cancelBtn.style.display = profileOnboardingForced ? "none" : "";
+
     document.getElementById("profileModal").classList.add("show");
   }
 
   window.closeProfileModal = function() {
+    if (profileOnboardingForced) return; // на первичной настройке закрытие мимо "Сохранить" заблокировано
     document.getElementById("profileModal").classList.remove("show");
     if (pendingAvatarPreviewUrl) { URL.revokeObjectURL(pendingAvatarPreviewUrl); pendingAvatarPreviewUrl = null; }
     pendingAvatarFile = null;
@@ -1696,6 +1723,10 @@
       showProfileMsg("Введи имя.", "error");
       return;
     }
+    if (profileOnboardingForced && !group) {
+      showProfileMsg("Укажи группу — без неё не получится продолжить.", "error");
+      return;
+    }
 
     const saveBtn = document.getElementById("profileSaveBtn");
     saveBtn.disabled = true;
@@ -1716,6 +1747,7 @@
       allUsers[currentUser.uid] = { ...allUsers[currentUser.uid], ...updates };
 
       renderMeBtn();
+      profileOnboardingForced = false; // снимаем ДО закрытия — иначе closeProfileModal сама себя заблокирует
       closeProfileModal();
 
       // Обновляем список чатов и открытый чат, если в них показывалось имя/фото
