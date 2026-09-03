@@ -1,61 +1,476 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NEON SHOP — Витрина</title>
-    <link rel="stylesheet" href="style.css">
-    
-    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Вход — Мессенджер</title>
+
+<style>
+  :root {
+    --ink: #1a1d1f;
+    --paper: #f6f4ef;
+    --card: #ffffff;
+    --accent: #3454d1;
+    --accent-dark: #2540a8;
+    --line: #e2ded3;
+    --muted: #8a8578;
+    --error: #c0392b;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: var(--paper);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+  }
+
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 24px;
+  }
+
+  .wrap {
+    width: 100%;
+    max-width: 380px;
+  }
+
+  .mark {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .mark-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    background: var(--accent);
+    transform: rotate(45deg);
+    flex-shrink: 0;
+  }
+
+  .mark-text {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  .tagline {
+    color: var(--muted);
+    font-size: 14.5px;
+    margin: 0 0 32px 0;
+    line-height: 1.4;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 28px 24px;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--paper);
+    border-radius: 10px;
+    padding: 4px;
+    margin-bottom: 22px;
+  }
+
+  .tab {
+    flex: 1;
+    text-align: center;
+    padding: 9px 0;
+    border-radius: 7px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    transition: background 0.15s ease, color 0.15s ease;
+    font-family: inherit;
+  }
+
+  .tab.active {
+    background: var(--card);
+    color: var(--ink);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 6px;
+  }
+
+  .field {
+    margin-bottom: 16px;
+  }
+
+  input[type="email"],
+  input[type="password"],
+  input[type="text"] {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    font-size: 15px;
+    font-family: inherit;
+    background: var(--card);
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+
+  input:focus {
+    border-color: var(--accent);
+  }
+
+  .btn-primary {
+    width: 100%;
+    padding: 13px 0;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    margin-top: 4px;
+    transition: background 0.15s ease;
+  }
+
+  .btn-primary:hover { background: var(--accent-dark); }
+  .btn-primary:disabled { opacity: 0.6; cursor: default; }
+
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 20px 0;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .divider::before, .divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+  }
+
+  .btn-google {
+    width: 100%;
+    padding: 11px 0;
+    background: var(--card);
+    color: var(--ink);
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    font-size: 14.5px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+
+  .btn-google:hover {
+    border-color: var(--ink);
+  }
+
+  .btn-google svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+  .msg {
+    font-size: 13px;
+    margin-top: 14px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    display: none;
+    line-height: 1.4;
+  }
+
+  .msg.show { display: block; }
+
+  .msg.error {
+    background: #fbeae8;
+    color: var(--error);
+  }
+
+  .msg.info {
+    background: #eaf0fb;
+    color: var(--accent-dark);
+  }
+
+  .foot {
+    text-align: center;
+    color: var(--muted);
+    font-size: 12.5px;
+    margin-top: 20px;
+    line-height: 1.5;
+  }
+
+  .hidden { display: none !important; }
+
+  .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin-right: 8px;
+    vertical-align: -2px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
 </head>
 <body>
 
-<div class="container">
-    <h2>🛍 NEON SHOP</h2>
-    <div id="catalog" class="products-grid"></div>
-</div>
+<div class="wrap">
+  <div class="mark">
+    <div class="mark-dot"></div>
+    <div class="mark-text">Мессенджер</div>
+  </div>
+  <p class="tagline">Общий чат школы, классы и личные сообщения — в одном месте.</p>
 
-<div class="cart-bar" id="cart-bar" style="display: none;">
-    <div class="drag-line" id="cart-touch-zone"></div>
-    
-    <div class="cart-header" id="cart-header-zone">
-        <div class="cart-summary">
-            <b id="bar-total">0 ₽</b>
-            <span id="bar-count">0 товаров</span>
-        </div>
-        <button class="btn-open-cart" id="main-cart-btn">ОФОРМИТЬ</button>
+  <div class="card">
+    <div class="tabs">
+      <button class="tab active" id="tabLogin" onclick="switchTab('login')">Вход</button>
+      <button class="tab" id="tabSignup" onclick="switchTab('signup')">Регистрация</button>
     </div>
 
-    <div class="cart-content">
-        <h3 class="cart-title">Ваш заказ:</h3>
-        <div id="cart-items"></div>
-        
-        <form class="form-block" id="orderForm" onsubmit="event.preventDefault(); sendOrder();">
-            <input type="text" id="userName" placeholder="👤 Ваше имя" required minlength="2">
-            
-            <div class="no-phone-toggle">
-                <label class="checkbox-container">
-                    <input type="checkbox" id="noPhoneCheck" onchange="togglePhoneField()">
-                    <span class="checkmark"></span>
-                    Заказать без номера
-                </label>
-            </div>
+    <!-- ВХОД -->
+    <form id="formLogin" onsubmit="return handleLogin(event)">
+      <div class="field">
+        <label for="loginEmail">Email</label>
+        <input type="email" id="loginEmail" placeholder="you@example.com" required autocomplete="email">
+      </div>
+      <div class="field">
+        <label for="loginPassword">Пароль</label>
+        <input type="password" id="loginPassword" placeholder="••••••••" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn-primary" id="loginBtn">Войти</button>
+    </form>
 
-            <input type="tel" id="userPhone" 
-                   placeholder="📞 +7 (999) 000-00-00" 
-                   required 
-                   pattern="^(\+7|8|7)[\s\-]?\(?[489][0-9]{2}\)?[\s\-]?[\0-9]{3}[\s\-]?[\0-9]{2}[\s\-]?[\0-9]{2}$">
+    <!-- РЕГИСТРАЦИЯ -->
+    <form id="formSignup" class="hidden" onsubmit="return handleSignup(event)">
+      <div class="field">
+        <label for="signupName">Имя</label>
+        <input type="text" id="signupName" placeholder="Как тебя зовут" required autocomplete="name">
+      </div>
+      <div class="field">
+        <label for="signupEmail">Email</label>
+        <input type="email" id="signupEmail" placeholder="you@example.com" required autocomplete="email">
+      </div>
+      <div class="field">
+        <label for="signupPassword">Пароль</label>
+        <input type="password" id="signupPassword" placeholder="Минимум 6 символов" required autocomplete="new-password" minlength="6">
+      </div>
+      <button type="submit" class="btn-primary" id="signupBtn">Создать аккаунт</button>
+    </form>
 
-            <div id="phoneWarning" class="warning-text" style="display: none;">
-                ⚠️ Без номера будет трудно связаться с вами при пополненит товара или при её выдаче.
-            </div>
-            
-            <button type="submit" class="btn-final">ПОДТВЕРДИТЬ ЗАКАЗ</button>
-        </form>
-    </div>
+    <div class="divider">или</div>
+
+    <button class="btn-google" id="googleBtn" onclick="handleGoogle()">
+      <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.47c-.28 1.5-1.13 2.78-2.4 3.63v3.02h3.88c2.27-2.09 3.57-5.17 3.57-8.84z"/><path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.95-2.9l-3.88-3.02c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.11C3.25 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.27c-.24-.72-.38-1.49-.38-2.27s.14-1.55.38-2.27V6.62H1.27C.46 8.24 0 10.07 0 12s.46 3.76 1.27 5.38l4-3.11z"/><path fill="#EA4335" d="M12 4.77c1.76 0 3.34.6 4.58 1.79l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.25 2.7 1.27 6.62l4 3.11c.95-2.85 3.6-4.96 6.73-4.96z"/></svg>
+      Продолжить с Google
+    </button>
+
+    <div class="msg" id="msgBox"></div>
+  </div>
+
+  <p class="foot">Продолжая, ты соглашаешься быть вежливым собеседником.</p>
 </div>
 
-<script src="script.js"></script>
+<!-- Firebase SDK через CDN — никакого npm install не требуется -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+  import {
+    getAuth,
+    createUserWithEmailAndPassword,
+    signInWithEmailAndPassword,
+    GoogleAuthProvider,
+    signInWithPopup,
+    updateProfile,
+    onAuthStateChanged
+  } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+  import {
+    getFirestore,
+    doc,
+    setDoc,
+    getDoc,
+    serverTimestamp,
+    arrayUnion,
+    updateDoc
+  } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBnHrPE4dLu1Hl_1wxm7nL9Iu2ZSty5hBY",
+    authDomain: "messenjer8uchilisha.firebaseapp.com",
+    projectId: "messenjer8uchilisha",
+    storageBucket: "messenjer8uchilisha.firebasestorage.app",
+    messagingSenderId: "323729368567",
+    appId: "1:323729368567:web:67fff7eb9a659d55917af2",
+    measurementId: "G-V3REH3FXTF"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  // Если уже залогинен — сразу перекидываем в чат
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+      window.location.href = "chat.html";
+    }
+  });
+
+  window.switchTab = function(tab) {
+    const isLogin = tab === "login";
+    document.getElementById("tabLogin").classList.toggle("active", isLogin);
+    document.getElementById("tabSignup").classList.toggle("active", !isLogin);
+    document.getElementById("formLogin").classList.toggle("hidden", !isLogin);
+    document.getElementById("formSignup").classList.toggle("hidden", isLogin);
+    hideMsg();
+  }
+
+  function showMsg(text, type) {
+    const box = document.getElementById("msgBox");
+    box.textContent = text;
+    box.className = "msg show " + type;
+  }
+
+  function hideMsg() {
+    document.getElementById("msgBox").className = "msg";
+  }
+
+  function friendlyError(code) {
+    const map = {
+      "auth/invalid-email": "Некорректный email.",
+      "auth/user-not-found": "Такого пользователя не существует.",
+      "auth/wrong-password": "Неверный пароль.",
+      "auth/invalid-credential": "Неверный email или пароль.",
+      "auth/email-already-in-use": "Этот email уже зарегистрирован.",
+      "auth/weak-password": "Пароль слишком простой (минимум 6 символов).",
+      "auth/popup-closed-by-user": "Окно входа было закрыто.",
+      "auth/network-request-failed": "Проблема с интернет-соединением."
+    };
+    return map[code] || "Что-то пошло не так. Попробуй ещё раз.";
+  }
+
+  // Создаёт профиль пользователя в Firestore и добавляет его в глобальный чат
+  async function ensureUserProfile(user, displayNameOverride) {
+    const userRef = doc(db, "users", user.uid);
+    const existing = await getDoc(userRef);
+
+    if (!existing.exists()) {
+      await setDoc(userRef, {
+        name: displayNameOverride || user.displayName || user.email.split("@")[0],
+        email: user.email,
+        photoURL: user.photoURL || null,
+        createdAt: serverTimestamp()
+      });
+
+      // Добавляем пользователя в глобальный чат
+      const globalChatRef = doc(db, "chats", "global");
+      const globalChatSnap = await getDoc(globalChatRef);
+
+      if (!globalChatSnap.exists()) {
+        await setDoc(globalChatRef, {
+          type: "global",
+          name: "Общий чат",
+          members: [user.uid],
+          createdAt: serverTimestamp()
+        });
+      } else {
+        await updateDoc(globalChatRef, {
+          members: arrayUnion(user.uid)
+        });
+      }
+    }
+  }
+
+  window.handleLogin = async function(e) {
+    e.preventDefault();
+    hideMsg();
+    const btn = document.getElementById("loginBtn");
+    const email = document.getElementById("loginEmail").value.trim();
+    const password = document.getElementById("loginPassword").value;
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Входим…';
+
+    try {
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      await ensureUserProfile(cred.user);
+      window.location.href = "chat.html";
+    } catch (err) {
+      showMsg(friendlyError(err.code), "error");
+      btn.disabled = false;
+      btn.textContent = "Войти";
+    }
+    return false;
+  }
+
+  window.handleSignup = async function(e) {
+    e.preventDefault();
+    hideMsg();
+    const btn = document.getElementById("signupBtn");
+    const name = document.getElementById("signupName").value.trim();
+    const email = document.getElementById("signupEmail").value.trim();
+    const password = document.getElementById("signupPassword").value;
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Создаём аккаунт…';
+
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      await updateProfile(cred.user, { displayName: name });
+      await ensureUserProfile(cred.user, name);
+      window.location.href = "chat.html";
+    } catch (err) {
+      showMsg(friendlyError(err.code), "error");
+      btn.disabled = false;
+      btn.textContent = "Создать аккаунт";
+    }
+    return false;
+  }
+
+  window.handleGoogle = async function() {
+    hideMsg();
+    const btn = document.getElementById("googleBtn");
+    btn.disabled = true;
+
+    try {
+      const provider = new GoogleAuthProvider();
+      const cred = await signInWithPopup(auth, provider);
+      await ensureUserProfile(cred.user);
+      window.location.href = "chat.html";
+    } catch (err) {
+      showMsg(friendlyError(err.code), "error");
+      btn.disabled = false;
+    }
+  }
+</script>
+
 </body>
 </html>
