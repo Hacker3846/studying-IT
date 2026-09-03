@@ -505,7 +505,12 @@
     getDoc,
     serverTimestamp,
     arrayUnion,
-    updateDoc
+    updateDoc,
+    collection,
+    query,
+    where,
+    limit,
+    getDocs
   } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -603,6 +608,18 @@
     return map[code] || "Что-то пошло не так. Юг1 хьажа.";
   }
 
+  // Проверяет, есть ли уже пользователь с таким email среди документов
+  // коллекции users (а не через Firebase Auth — fetchSignInMethodsForEmail
+  // не всегда надёжен из-за защиты от email enumeration в новых версиях SDK).
+  // Именно коллекция users — источник списка в "Новом чате", поэтому
+  // дубли нужно предотвращать именно здесь.
+  async function emailAlreadyRegistered(email) {
+    const usersRef = collection(db, "users");
+    const q = query(usersRef, where("email", "==", email), limit(1));
+    const snap = await getDocs(q);
+    return !snap.empty;
+  }
+
   // Создаёт профиль пользователя в Firestore (если его ещё нет)
   // и гарантирует, что пользователь состоит в глобальном чате —
   // как при первой регистрации, так и при обычном логине уже существующего аккаунта.
@@ -676,6 +693,17 @@
     btn.innerHTML = '<span class="spinner"></span>Создаём аккаунт…';
 
     try {
+      // Проверяем ДО создания Auth-аккаунта: если email уже привязан
+      // к какому-то профилю в Firestore (неважно, каким методом входа
+      // он был создан — email/пароль или Google), не даём создать дубль.
+      const alreadyExists = await emailAlreadyRegistered(email);
+      if (alreadyExists) {
+        showMsg("Ишт email уже йазин йолш йу. Юг1 хьажа \"Войти\".", "error");
+        btn.disabled = false;
+        btn.textContent = "Создать аккаунт";
+        return false;
+      }
+
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(cred.user, { displayName: name });
       await ensureUserProfile(cred.user, name);
@@ -696,6 +724,22 @@
     try {
       const provider = new GoogleAuthProvider();
       const cred = await signInWithPopup(auth, provider);
+
+      // Если это НОВЫЙ Firebase Auth uid (Google даёт другой uid, чем
+      // email/пароль-аккаунт с тем же email), но профиль с таким email
+      // уже есть в Firestore — значит, человек уже регистрировался
+      // раньше другим способом. Не создаём второй профиль-дубль.
+      const userDocSnap = await getDoc(doc(db, "users", cred.user.uid));
+      if (!userDocSnap.exists()) {
+        const alreadyExists = await emailAlreadyRegistered(cred.user.email);
+        if (alreadyExists) {
+          await signOut(auth);
+          showMsg("Ишт email уже йазин йолш йу через другой способ входа (email/пароль). Юг1 хьажа обычный вход.", "error");
+          btn.disabled = false;
+          return;
+        }
+      }
+
       await ensureUserProfile(cred.user);
       window.location.href = "chat.html";
     } catch (err) {

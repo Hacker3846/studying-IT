@@ -1433,6 +1433,7 @@
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
+  window.db = db; // для разовых админ-скриптов через консоль (поиск/слияние дублей users)
 
   let currentUser = null;
   let currentUserData = null;
@@ -3081,6 +3082,30 @@
 
     const q = userSearchQuery.trim().toLowerCase();
     let others = Object.entries(allUsers).filter(([uid]) => uid !== currentUser.uid);
+
+    // Страховка от дублей по email: основной фикс — запрет на регистрации
+    // (index.html), но если в базе всё же окажется два профиля с одним email
+    // (например, остались старые дубли или кто-то создал документ вручную),
+    // в списке "Новый чат" показываем только один — с самым ранним createdAt.
+    const seenEmails = new Map(); // email -> uid, который оставляем
+    others.forEach(([uid, data]) => {
+      const email = (data.email || "").toLowerCase().trim();
+      if (!email) return;
+      const kept = seenEmails.get(email);
+      if (!kept) {
+        seenEmails.set(email, uid);
+        return;
+      }
+      const keptCreated = allUsers[kept]?.createdAt?.seconds || 0;
+      const currentCreated = data.createdAt?.seconds || 0;
+      // Оставляем более старый аккаунт (вероятный оригинал)
+      if (currentCreated < keptCreated) seenEmails.set(email, uid);
+    });
+    others = others.filter(([uid, data]) => {
+      const email = (data.email || "").toLowerCase().trim();
+      if (!email) return true; // нет email — дедупликация неприменима, оставляем
+      return seenEmails.get(email) === uid;
+    });
 
     if (q) {
       others = others.filter(([, data]) => {
