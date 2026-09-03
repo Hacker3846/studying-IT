@@ -280,8 +280,8 @@
     margin-bottom: 4px;
   }
 
-  .msg-row.me { align-self: flex-end; flex-direction: column; align-items: flex-end; }
-  .msg-row.them { align-self: flex-start; flex-direction: column; align-items: flex-start; }
+  .msg-row.me { align-self: flex-end; }
+  .msg-row.them { align-self: flex-start; }
 
   .msg-sender {
     font-size: 11.5px;
@@ -404,12 +404,119 @@
   .msg-row.them .upload-progress { border-bottom-left-radius: 4px; }
 
   /* ===== ДЕЙСТВИЯ НАД СООБЩЕНИЕМ (ответить / удалить) ===== */
-  .msg-row { position: relative; }
+  .msg-row {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .msg-row.me { justify-content: flex-end; }
+  .msg-row.them { justify-content: flex-start; }
 
   .msg-bubble-wrap {
     position: relative;
     cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
   }
+
+  /* ===== ВЫДЕЛЕНИЕ НЕСКОЛЬКИХ СООБЩЕНИЙ ===== */
+
+  .msg-row-inner {
+    display: flex;
+    flex-direction: column;
+    max-width: 100%;
+  }
+
+  .msg-row.me .msg-row-inner { align-items: flex-end; }
+  .msg-row.them .msg-row-inner { align-items: flex-start; }
+
+  .msg-select-check {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1.5px solid var(--line);
+    background: var(--card);
+    flex-shrink: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    margin-top: 8px;
+    cursor: pointer;
+  }
+
+  .selection-mode .msg-select-check { display: flex; }
+
+  .msg-select-check svg {
+    width: 12px;
+    height: 12px;
+    opacity: 0;
+  }
+
+  .msg-row.selected .msg-select-check {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .msg-row.selected .msg-select-check svg { opacity: 1; }
+
+  .selection-mode .msg-row.selected .msg-bubble-wrap {
+    background: rgba(52,84,209,0.10);
+    border-radius: 16px;
+  }
+
+  .selection-mode .msg-row.me { flex-direction: row-reverse; }
+
+  .selection-mode .msg-bubble-wrap { cursor: pointer; }
+
+  /* Панель множественного выбора в шапке чата */
+  #selectionBar {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line);
+    background: var(--card);
+    flex-shrink: 0;
+  }
+
+  #selectionBar.show { display: flex; }
+
+  #selectionBar .sel-close {
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 2px 4px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  #selectionBar .sel-count {
+    flex: 1;
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  #selectionBar .sel-action {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    border: none;
+    background: var(--paper);
+    color: var(--ink);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  #selectionBar .sel-action:hover { background: var(--line); }
+  #selectionBar .sel-action svg { width: 18px; height: 18px; }
+  #selectionBar .sel-action.danger { color: var(--error, #c0392b); }
 
   .msg-action-menu {
     position: absolute;
@@ -983,6 +1090,16 @@
   </div>
 </div>
 
+<!-- МОДАЛКА: УДАЛЕНИЕ СООБЩЕНИЙ --><div class="modal-overlay" id="deleteModal">
+  <div class="modal" style="max-width:320px;">
+    <h3 id="deleteModalTitle">Удалить сообщение?</h3>
+    <p id="deleteModalText" style="font-size:13.5px;color:var(--muted);line-height:1.5;margin:-6px 0 4px 0;"></p>
+    <div class="modal-actions" id="deleteModalActions" style="flex-direction:column;gap:8px;">
+      <!-- кнопки подставляются из JS в зависимости от ситуации -->
+    </div>
+  </div>
+</div>
+
 <!-- МОДАЛКА: НОВЫЙ ЧАТ -->
 <div class="modal-overlay" id="newChatModal">
   <div class="modal">
@@ -1023,6 +1140,7 @@
     serverTimestamp,
     limit,
     arrayUnion,
+    arrayRemove,
     updateDoc
   } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
@@ -1055,6 +1173,10 @@
   let openMenuMessageId = null; // id сообщения, у которого сейчас открыто меню "Ответить/Удалить"
   let lastRenderedMessages = {}; // msgId -> data сообщения из последнего снапшота текущего чата
   let deleteWindowRefreshInterval = null;
+  let selectionMode = false;     // включён ли режим множественного выделения (после зажатия)
+  let selectedMessageIds = new Set(); // id выделенных сообщений
+  let longPressTimer = null;
+  let longPressTriggeredId = null; // чтобы не открывать обычное меню сразу после долгого нажатия
 
   // ---------- CLOUDINARY (хранение фото и голосовых) ----------
   const CLOUDINARY_CLOUD_NAME = "ctcszg0j";
@@ -1382,6 +1504,8 @@
   window.openChat = async function(chatId, chatData) {
     currentChatId = chatId;
     replyingTo = null;
+    selectionMode = false;
+    selectedMessageIds = new Set();
     if (deleteWindowRefreshInterval) { clearInterval(deleteWindowRefreshInterval); deleteWindowRefreshInterval = null; }
     document.getElementById("app").classList.add("chat-open");
 
@@ -1395,6 +1519,16 @@
           <div id="chatHeaderName">${escapeHtml(chatDisplayName(chatData))}</div>
           <div id="chatHeaderSub">${chatHeaderSubText(chatData)}</div>
         </div>
+      </div>
+      <div id="selectionBar">
+        <button class="sel-close" onclick="exitSelectionMode()" title="Отменить">×</button>
+        <div class="sel-count" id="selCount">1</div>
+        <button class="sel-action" id="selReplyBtn" onclick="replySelectedMessage()" title="Ответить">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M9 14L4 9L9 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 9H14.5C18.09 9 21 11.91 21 15.5V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="sel-action danger" onclick="deleteSelectedMessages()" title="Удалить">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M4 7H20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 7V4H15V7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 7L7 20H17L18 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
       </div>
       <div id="messages"></div>
       <div id="replyPreview">
@@ -1489,6 +1623,11 @@
       snap.forEach(d => {
         const msg = d.data();
         const msgId = d.id;
+
+        // Сообщение "удалено у себя" тем, кто его удалил — не показываем
+        // его вообще (для остальных участников оно остаётся видимым как обычно).
+        if ((msg.deletedFor || []).includes(currentUser.uid)) return;
+
         lastRenderedMessages[msgId] = msg;
         const isMe = msg.senderId === currentUser.uid;
         const row = document.createElement("div");
@@ -1504,9 +1643,12 @@
         const time = msg.createdAt?.toDate ? formatTime(msg.createdAt.toDate()) : "";
 
         row.appendChild(renderBubble(msg, msgId, senderLabel, time, isMe));
+        if (selectionMode && selectedMessageIds.has(msgId)) row.classList.add("selected");
+        attachRowGestures(row, msgId);
         box.appendChild(row);
       });
 
+      if (selectionMode) document.getElementById("messages").classList.add("selection-mode");
       box.scrollTop = box.scrollHeight;
     });
 
@@ -1544,8 +1686,11 @@
 
       const time = msg.createdAt?.toDate ? formatTime(msg.createdAt.toDate()) : "";
       row.appendChild(renderBubble(msg, msgId, senderLabel, time, isMe));
+      if (selectionMode && selectedMessageIds.has(msgId)) row.classList.add("selected");
+      attachRowGestures(row, msgId);
       box.appendChild(row);
     });
+    box.classList.toggle("selection-mode", selectionMode);
     if (scrollBottom) box.scrollTop = box.scrollHeight;
   }
 
@@ -1568,38 +1713,32 @@
   }
 
   function renderBubble(msg, msgId, senderLabelHTML, time, isMe) {
-    const wrap = document.createElement("div");
     const replyQuoteHTML = renderReplyQuoteHTML(msg);
 
-    // Меню действий: "Ответить" доступно всегда, "Удалить" — только для
-    // своих сообщений и только пока не прошло 10 минут с отправки.
-    const canDelete = isMe && messageIsWithinDeleteWindow(msg);
-    const menuHTML = `
-      <div class="msg-action-menu" id="menu-${msgId}">
-        <button class="msg-action-btn" onclick="event.stopPropagation(); startReply('${msgId}')">↩ Ответить</button>
-        ${canDelete ? `<button class="msg-action-btn danger" onclick="event.stopPropagation(); deleteMessage('${msgId}')">🗑 Удалить</button>` : ""}
+    const checkHTML = `
+      <div class="msg-select-check" onclick="event.stopPropagation(); toggleMessageSelected('${msgId}')">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 12L9 17L20 6" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
     `;
 
+    let innerHTML;
     if (msg.type === "image") {
-      wrap.innerHTML = `
+      innerHTML = `
         ${senderLabelHTML}
-        <div class="msg-bubble-wrap" onclick="toggleMsgMenu('${msgId}')">
-          ${menuHTML}
+        <div class="msg-bubble-wrap">
           ${replyQuoteHTML}
-          <img class="bubble-image" src="${msg.mediaUrl}" onclick="event.stopPropagation(); openLightbox('${msg.mediaUrl}')">
+          <img class="bubble-image" src="${msg.mediaUrl}" onclick="event.stopPropagation(); handleBubbleTap('${msgId}', () => openLightbox('${msg.mediaUrl}'))">
         </div>
         <div class="msg-time">${time}</div>
       `;
     } else if (msg.type === "voice") {
       const dur = msg.duration ? formatDuration(msg.duration) : "0:00";
-      wrap.innerHTML = `
+      innerHTML = `
         ${senderLabelHTML}
-        <div class="msg-bubble-wrap" onclick="toggleMsgMenu('${msgId}')">
-          ${menuHTML}
+        <div class="msg-bubble-wrap">
           <div class="voice-bubble" data-url="${msg.mediaUrl}">
             ${replyQuoteHTML}
-            <button class="voice-play-btn" onclick="event.stopPropagation(); toggleVoicePlay(this)">
+            <button class="voice-play-btn" onclick="event.stopPropagation(); handleBubbleTap('${msgId}', () => toggleVoicePlay(this))">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5V19L19 12L8 5Z"/></svg>
             </button>
             <div class="voice-track"><div class="voice-track-fill"></div></div>
@@ -1609,55 +1748,172 @@
         <div class="msg-time">${time}</div>
       `;
     } else {
-      wrap.innerHTML = `
+      innerHTML = `
         ${senderLabelHTML}
-        <div class="msg-bubble-wrap" onclick="toggleMsgMenu('${msgId}')">
-          ${menuHTML}
+        <div class="msg-bubble-wrap">
           <div class="bubble">${replyQuoteHTML}${escapeHtml(msg.text)}</div>
         </div>
         <div class="msg-time">${time}</div>
       `;
     }
-    return wrap;
+
+    const inner = document.createElement("div");
+    inner.className = "msg-row-inner";
+    inner.innerHTML = innerHTML;
+
+    const frag = document.createDocumentFragment();
+    if (isMe) {
+      frag.appendChild(inner);
+      const checkWrap = document.createElement("div");
+      checkWrap.innerHTML = checkHTML;
+      frag.appendChild(checkWrap.firstElementChild);
+    } else {
+      const checkWrap = document.createElement("div");
+      checkWrap.innerHTML = checkHTML;
+      frag.appendChild(checkWrap.firstElementChild);
+      frag.appendChild(inner);
+    }
+    return frag;
   }
 
-  // ---------- УДАЛЕНИЕ / ОТВЕТ НА СООБЩЕНИЕ ----------
+  // ---------- ВЫДЕЛЕНИЕ / ОТВЕТ / УДАЛЕНИЕ СООБЩЕНИЙ ----------
+  // Правила:
+  //  - Зажатие (long-press) на сообщении (текст или голосовое/фото) включает
+  //    режим множественного выделения — как в WhatsApp/Telegram. В этом режиме
+  //    обычный тап по любому сообщению просто отмечает/снимает отметку.
+  //  - Пока выделено ровно одно сообщение — в шапке доступна кнопка "Ответить".
+  //    Как только выделено 2+ — доступно только удаление.
+  //  - Чужое сообщение удаляется ТОЛЬКО у себя (с подтверждением).
+  //  - Своё сообщение в первые 10 минут после отправки можно удалить у всех
+  //    или только у себя. После 10 минут — только у себя (с явным предупреждением
+  //    о том, что "у всех" больше не сработает).
   const DELETE_WINDOW_MS = 10 * 60 * 1000; // 10 минут
 
   function messageIsWithinDeleteWindow(msg) {
-    if (!msg.createdAt?.toDate) return false; // ещё не подтверждено сервером — на всякий случай не даём удалить
+    if (!msg.createdAt?.toDate) return false; // ещё не подтверждено сервером — на всякий случай не даём удалить "у всех"
     return (Date.now() - msg.createdAt.toDate().getTime()) < DELETE_WINDOW_MS;
   }
 
-  window.toggleMsgMenu = function(msgId) {
-    const menu = document.getElementById("menu-" + msgId);
-    if (!menu) return;
-    const isOpen = menu.classList.contains("show");
-    document.querySelectorAll(".msg-action-menu.show").forEach(m => m.classList.remove("show"));
-    if (!isOpen) {
-      menu.classList.add("show");
-      openMenuMessageId = msgId;
-    } else {
-      openMenuMessageId = null;
-    }
+  const LONG_PRESS_MS = 450;
+
+  // Вешаем обработчики зажатия/тапа на строку сообщения. Работает и для
+  // touch-устройств, и для мыши (десктоп), чтобы поведение было одинаковым.
+  function attachRowGestures(row, msgId) {
+    const wrap = row.querySelector(".msg-bubble-wrap");
+    if (!wrap) return;
+
+    let moved = false;
+
+    const startPress = () => {
+      moved = false;
+      clearTimeout(longPressTimer);
+      longPressTimer = setTimeout(() => {
+        if (moved) return;
+        longPressTriggeredId = msgId;
+        enterSelectionMode(msgId);
+        if (navigator.vibrate) navigator.vibrate(15);
+      }, LONG_PRESS_MS);
+    };
+
+    const cancelPress = () => {
+      clearTimeout(longPressTimer);
+    };
+
+    wrap.addEventListener("touchstart", startPress, { passive: true });
+    wrap.addEventListener("touchmove", () => { moved = true; cancelPress(); }, { passive: true });
+    wrap.addEventListener("touchend", cancelPress);
+    wrap.addEventListener("touchcancel", cancelPress);
+
+    wrap.addEventListener("mousedown", startPress);
+    wrap.addEventListener("mousemove", () => { moved = true; });
+    wrap.addEventListener("mouseup", cancelPress);
+    wrap.addEventListener("mouseleave", cancelPress);
+
+    wrap.addEventListener("click", () => {
+      // Если клик пришёл сразу после сработавшего long-press на ЭТОМ ЖЕ
+      // сообщении — это тот самый press, а не отдельный тап; игнорируем,
+      // чтобы не снять только что поставленную отметку.
+      if (longPressTriggeredId === msgId) {
+        longPressTriggeredId = null;
+        return;
+      }
+      if (selectionMode) {
+        toggleMessageSelected(msgId);
+      } else {
+        handleBubbleTap(msgId, null);
+      }
+    });
   }
 
-  // Закрывать открытое меню при клике куда угодно ещё
-  document.addEventListener("click", (e) => {
-    if (!openMenuMessageId) return;
-    if (e.target.closest(".msg-bubble-wrap")) return;
-    document.querySelectorAll(".msg-action-menu.show").forEach(m => m.classList.remove("show"));
-    openMenuMessageId = null;
-  });
+  // Обычный (короткий) тап по сообщению вне режима выделения:
+  // для фото/голосовых внутренний элемент уже сам решает, что делать
+  // (открыть лайтбокс, включить проигрывание) — прокидываем действие сюда;
+  // просто текстовые сообщения по одиночному тапу ничего не делают.
+  window.handleBubbleTap = function(msgId, action) {
+    if (selectionMode) {
+      toggleMessageSelected(msgId);
+      return;
+    }
+    if (typeof action === "function") action();
+  }
 
-  window.startReply = function(msgId) {
-    const row = document.querySelector(`.msg-row[data-id="${msgId}"]`);
-    document.querySelectorAll(".msg-action-menu.show").forEach(m => m.classList.remove("show"));
-    openMenuMessageId = null;
-    if (!row) return;
+  function enterSelectionMode(initialMsgId) {
+    selectionMode = true;
+    selectedMessageIds = new Set([initialMsgId]);
+    document.getElementById("messages")?.classList.add("selection-mode");
+    document.getElementById("selectionBar")?.classList.add("show");
+    updateSelectionRowClasses();
+    updateSelectionBar();
+  }
 
-    // Достаём данные сообщения заново из DOM недостаточно надёжно для текста —
-    // проще взять их из lastRenderedMessages, который наполняется в listenToMessages.
+  window.exitSelectionMode = function() {
+    selectionMode = false;
+    selectedMessageIds = new Set();
+    document.getElementById("messages")?.classList.remove("selection-mode");
+    document.getElementById("selectionBar")?.classList.remove("show");
+    updateSelectionRowClasses();
+  }
+
+  window.toggleMessageSelected = function(msgId) {
+    if (!selectionMode) {
+      enterSelectionMode(msgId);
+      return;
+    }
+    if (selectedMessageIds.has(msgId)) {
+      selectedMessageIds.delete(msgId);
+    } else {
+      selectedMessageIds.add(msgId);
+    }
+    if (selectedMessageIds.size === 0) {
+      exitSelectionMode();
+      return;
+    }
+    updateSelectionRowClasses();
+    updateSelectionBar();
+  }
+
+  function updateSelectionRowClasses() {
+    document.querySelectorAll(".msg-row").forEach(row => {
+      row.classList.toggle("selected", selectedMessageIds.has(row.dataset.id));
+    });
+  }
+
+  function updateSelectionBar() {
+    const count = selectedMessageIds.size;
+    const countEl = document.getElementById("selCount");
+    const replyBtn = document.getElementById("selReplyBtn");
+    if (countEl) countEl.textContent = String(count);
+    if (replyBtn) replyBtn.style.display = count === 1 ? "flex" : "none";
+  }
+
+  window.replySelectedMessage = function() {
+    if (selectedMessageIds.size !== 1) return;
+    const msgId = Array.from(selectedMessageIds)[0];
+    exitSelectionMode();
+    startReply(msgId);
+  }
+
+  function startReply(msgId) {
     const msg = lastRenderedMessages[msgId];
     if (!msg) return;
 
@@ -1706,21 +1962,113 @@
     }
   }
 
-  window.deleteMessage = async function(msgId) {
-    document.querySelectorAll(".msg-action-menu.show").forEach(m => m.classList.remove("show"));
-    openMenuMessageId = null;
+  // ---------- УДАЛЕНИЕ ----------
+  // Точка входа из панели множественного выделения.
+  window.deleteSelectedMessages = function() {
+    if (selectedMessageIds.size === 0) return;
+    const ids = Array.from(selectedMessageIds);
+    openDeleteModal(ids);
+  }
 
-    const msg = lastRenderedMessages[msgId];
-    if (!msg) return;
-    if (!messageIsWithinDeleteWindow(msg)) {
-      alert("Прошло больше 10 минут — удалить это сообщение уже нельзя.");
-      return;
+  // Открывает модалку подтверждения удаления и решает, какие кнопки показать,
+  // в зависимости от состава выделенных сообщений:
+  //  - если ВСЕ выделенные — свои и ВСЕ ещё в пределах 10 минут → показываем
+  //    "Удалить у всех" и "Удалить у себя";
+  //  - если есть хотя бы одно чужое или просроченное своё → доступно только
+  //    "Удалить у себя" (для просроченных — с объяснением про 10 минут).
+  function openDeleteModal(ids) {
+    const msgs = ids.map(id => ({ id, msg: lastRenderedMessages[id] })).filter(x => x.msg);
+    if (msgs.length === 0) return;
+
+    const allMine = msgs.every(x => x.msg.senderId === currentUser.uid);
+    const allWithinWindow = msgs.every(x => messageIsWithinDeleteWindow(x.msg));
+    const anyMineExpired = msgs.some(x => x.msg.senderId === currentUser.uid && !messageIsWithinDeleteWindow(x.msg));
+
+    const title = document.getElementById("deleteModalTitle");
+    const text = document.getElementById("deleteModalText");
+    const actions = document.getElementById("deleteModalActions");
+    if (!title || !text || !actions) return;
+
+    const count = msgs.length;
+    const plural = count === 1 ? "сообщение" : "сообщения";
+
+    actions.innerHTML = "";
+
+    if (allMine && allWithinWindow) {
+      title.textContent = count === 1 ? "Удалить сообщение?" : `Удалить ${count} ${plural}?`;
+      text.textContent = "";
+
+      const btnAll = document.createElement("button");
+      btnAll.className = "modal-btn confirm";
+      btnAll.style.background = "var(--error, #c0392b)";
+      btnAll.textContent = "Удалить у всех";
+      btnAll.onclick = () => confirmDelete(ids, "everyone");
+
+      const btnMe = document.createElement("button");
+      btnMe.className = "modal-btn confirm";
+      btnMe.textContent = "Удалить у себя";
+      btnMe.onclick = () => confirmDelete(ids, "me");
+
+      const btnCancel = document.createElement("button");
+      btnCancel.className = "modal-btn cancel";
+      btnCancel.textContent = "Отмена";
+      btnCancel.onclick = closeDeleteModal;
+
+      actions.appendChild(btnAll);
+      actions.appendChild(btnMe);
+      actions.appendChild(btnCancel);
+    } else {
+      title.textContent = count === 1 ? "Вы хотите удалить сообщение у себя?" : `Удалить ${count} ${plural} у себя?`;
+      text.textContent = anyMineExpired || (allMine && !allWithinWindow)
+        ? "Прошло 10 минут, после этого времени сообщение не возможно удалить у всех."
+        : "Сообщение будет удалено только в вашей переписке — у остальных участников оно останется.";
+
+      const btnMe = document.createElement("button");
+      btnMe.className = "modal-btn confirm";
+      btnMe.textContent = "Удалить у себя";
+      btnMe.onclick = () => confirmDelete(ids, "me");
+
+      const btnCancel = document.createElement("button");
+      btnCancel.className = "modal-btn cancel";
+      btnCancel.textContent = "Отмена";
+      btnCancel.onclick = closeDeleteModal;
+
+      actions.appendChild(btnMe);
+      actions.appendChild(btnCancel);
     }
-    if (!confirm("Удалить это сообщение?")) return;
+
+    document.getElementById("deleteModal").classList.add("show");
+  }
+
+  function closeDeleteModal() {
+    document.getElementById("deleteModal").classList.remove("show");
+  }
+
+  // mode: "everyone" — физическое удаление документа сообщения (доступно только
+  // для своих сообщений в пределах 10 минут — этот путь заблокирован в openDeleteModal
+  // при других условиях);
+  // mode: "me" — сообщение остаётся в базе, но в поле deletedFor добавляется
+  // мой uid, из-за чего оно перестаёт показываться только в моей ленте.
+  async function confirmDelete(ids, mode) {
+    closeDeleteModal();
+    exitSelectionMode();
 
     try {
-      await deleteDoc(doc(db, "chats", currentChatId, "messages", msgId));
-      if (replyingTo && replyingTo.id === msgId) cancelReply();
+      for (const msgId of ids) {
+        const msg = lastRenderedMessages[msgId];
+        if (!msg) continue;
+
+        if (mode === "everyone") {
+          if (msg.senderId !== currentUser.uid || !messageIsWithinDeleteWindow(msg)) continue; // подстраховка
+          await deleteDoc(doc(db, "chats", currentChatId, "messages", msgId));
+        } else {
+          await updateDoc(doc(db, "chats", currentChatId, "messages", msgId), {
+            deletedFor: arrayUnion(currentUser.uid)
+          });
+        }
+
+        if (replyingTo && replyingTo.id === msgId) cancelReply();
+      }
     } catch (err) {
       alert("Не удалось удалить сообщение: " + err.message);
     }
@@ -1913,6 +2261,17 @@
   window.createSelectedChat = async function() {
     if (selectedUserIds.size === 0) return;
     const ids = Array.from(selectedUserIds);
+
+    // Личный чат 1-на-1 с самим собой запрещён (заметки себе не поддерживаются).
+    // Групповой чат — другая история: там просто нельзя выбрать себя как
+    // "дополнительного" участника (список и так исключает свой uid), поэтому
+    // единственный сценарий self-переписки, который нужно перекрыть — это
+    // персональный чат, где единственный выбранный uid совпадает с моим.
+    if (!isGroupMode && ids.length === 1 && ids[0] === currentUser.uid) {
+      alert("Нельзя создать чат с самим собой.");
+      return;
+    }
+
     const members = [currentUser.uid, ...ids];
 
     try {
